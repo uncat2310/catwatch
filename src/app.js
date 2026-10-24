@@ -16,9 +16,11 @@ import {
 import { isValidHttpUrl, parseHttpUrl } from '../shared/url.js';
 import { renderUptimeInner, renderUptimeStrip } from '../shared/uptime.js';
 
+// 存储键沿用改名前的名字，已保存的设置和管理登录不会丢
 const STORAGE_KEY = 'SCHRODINGER_PORTAL';
 const LEGACY_STORAGE_KEY = 'SCHRODINGER_PORTAL_V18';
 const ADMIN_TOKEN_KEY = 'SCHRODINGER_PORTAL_ADMIN_TOKEN';
+const LEGACY_DEFAULT_PROFILE = { title: '薛定谔的项目', subtitle: '心之所向，触手可及' };
 const SCHEMA_VERSION = 1;
 const HISTORY_REFRESH_MS = 60 * 1000;
 
@@ -129,6 +131,13 @@ class App {
           this.config.projects = ssrProjects || DEFAULT_CONFIG.projects;
         }
         if (!this.config.profile) this.config.profile = DEFAULT_CONFIG.profile;
+        // 改名前保存下来的默认标题 / 标语跟着换成新名字；用户自定义过的不动
+        if (this.config.profile.title === LEGACY_DEFAULT_PROFILE.title) {
+          this.config.profile.title = DEFAULT_CONFIG.profile.title;
+        }
+        if (this.config.profile.subtitle === LEGACY_DEFAULT_PROFILE.subtitle) {
+          this.config.profile.subtitle = DEFAULT_CONFIG.profile.subtitle;
+        }
         if (!this.config.settings) this.config.settings = DEFAULT_CONFIG.settings;
         this.config.categories = DEFAULT_CONFIG.categories;
         this.config.schemaVersion = SCHEMA_VERSION;
@@ -626,9 +635,9 @@ class App {
     const p = this.config.profile;
     const headerTitle = document.getElementById('headerTitle');
     const headerSubtitle = document.getElementById('headerSubtitle');
-    if (headerTitle) headerTitle.textContent = p.title || '薛定谔的项目';
+    if (headerTitle) headerTitle.textContent = p.title || DEFAULT_CONFIG.profile.title;
     if (headerSubtitle) {
-      headerSubtitle.textContent = p.subtitle || '心之所向，触手可及';
+      headerSubtitle.textContent = p.subtitle || DEFAULT_CONFIG.profile.subtitle;
       this.subtitleRevealed = false;
       this.revealSubtitleOnce();
     }
@@ -1144,8 +1153,8 @@ class App {
     const p = this.config.profile;
     const cfgTitle = document.getElementById('cfgTitle');
     const cfgSubtitle = document.getElementById('cfgSubtitle');
-    if (cfgTitle) cfgTitle.value = p.title || '薛定谔的项目';
-    if (cfgSubtitle) cfgSubtitle.value = p.subtitle || '心之所向，触手可及';
+    if (cfgTitle) cfgTitle.value = p.title || DEFAULT_CONFIG.profile.title;
+    if (cfgSubtitle) cfgSubtitle.value = p.subtitle || DEFAULT_CONFIG.profile.subtitle;
     this.renderAdminStatus();
     this.openOverlay('settingsModalOverlay', '#cfgTitle');
   }
@@ -1157,8 +1166,8 @@ class App {
   saveSettings() {
     const cfgTitle = document.getElementById('cfgTitle');
     const cfgSubtitle = document.getElementById('cfgSubtitle');
-    if (cfgTitle) this.config.profile.title = cfgTitle.value.trim() || '薛定谔的项目';
-    if (cfgSubtitle) this.config.profile.subtitle = cfgSubtitle.value.trim() || '心之所向，触手可及';
+    if (cfgTitle) this.config.profile.title = cfgTitle.value.trim() || DEFAULT_CONFIG.profile.title;
+    if (cfgSubtitle) this.config.profile.subtitle = cfgSubtitle.value.trim() || DEFAULT_CONFIG.profile.subtitle;
     this.persistState();
     this.renderHeader();
     this.closeSettingsModal();
@@ -1176,5 +1185,5 @@ class App {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  window.schrodingerPortal = new App();
+  window.catWatch = new App();
 });

@@ -1,9 +1,9 @@
 services:
-  schrodinger-portal:
+  catwatch:
     # 正式部署优先拉取预构建镜像；本地开发可 docker compose build 使用下方 build
-    image: ghcr.io/uncat2310/schrodinger-portal:latest
+    image: ghcr.io/uncat2310/catwatch:latest
     build: .
-    container_name: schrodinger-portal
+    container_name: catwatch
     restart: unless-stopped
     ports:
       - "3000:3000"

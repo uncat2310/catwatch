@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐱 薛定谔的项目 (Schrödinger's Portal)
+# 🐱 猫咪值班室 (CatWatch)
 
 **温暖的自托管导航页，顺便替你盯着每一个服务**
 
@@ -8,7 +8,7 @@
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)](https://nodejs.org)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ed.svg)](https://www.docker.com/)
 
-*心之所向，触手可及。*
+*一页直达，猫在值班。*
 
 <br/>
 
@@ -35,9 +35,9 @@
 
 ## 📖 简介
 
-薛定谔的猫在打开盒子之前，谁也不知道它是死是活——你的自建服务也一样。
+自建服务一多，地址记不住，挂了也不知道。那就请一只猫来值班：它把所有服务摆在一页上，每隔几秒挨个看一眼，谁掉线了就喊你。
 
-**薛定谔的项目**是一个轻量的个人服务器导航页：把常用服务聚合成一页，同时由服务端持续探测、记录 24 小时可用率，服务掉线或恢复时推送通知，还可以生成一个只读的公开状态页分享给朋友。
+**猫咪值班室**是一个轻量的个人服务器导航页：把常用服务聚合成一页，同时由服务端持续探测、记录 24 小时可用率，服务掉线或恢复时推送通知，还可以生成一个只读的公开状态页分享给朋友。
 
 - **一个容器搞定**：Node.js + Vite + 原生 JavaScript，无数据库、无前端框架
 - **数据都是文件**：服务列表是 `config/projects.json`，历史和图标缓存在 `data/` 目录
@@ -63,17 +63,17 @@
 ### Docker（推荐）
 
 ```bash
-mkdir -p schrodinger-portal/config schrodinger-portal/data && cd schrodinger-portal
+mkdir -p catwatch/config catwatch/data && cd catwatch
 sudo chown -R 1000:1000 config data     # 容器内以 node 用户 (uid 1000) 运行，需要写权限
 
 docker run -d \
-  --name schrodinger-portal \
+  --name catwatch \
   --restart unless-stopped \
   -p 3000:3000 \
   -e ADMIN_TOKEN="换成一串足够长的随机字符串" \
   -v "$PWD/config:/app/config" \
   -v "$PWD/data:/app/data" \
-  ghcr.io/uncat2310/schrodinger-portal:latest
+  ghcr.io/uncat2310/catwatch:latest
 ```
 
 然后：
@@ -87,8 +87,8 @@ docker run -d \
 ### Docker Compose
 
 ```bash
-git clone https://github.com/uncat2310/schrodinger-portal.git
-cd schrodinger-portal
+git clone https://github.com/uncat2310/catwatch.git
+cd catwatch
 docker compose up -d
 ```
 
@@ -111,44 +111,44 @@ PM2：
 
 ```bash
 npm install -g pm2
-ADMIN_TOKEN="你的口令" pm2 start server.js --name "schrodinger-portal"
+ADMIN_TOKEN="你的口令" pm2 start server.js --name "catwatch"
 pm2 save
 ```
 
 systemd（生产环境建议用独立的非 root 用户运行）：
 
 ```bash
-sudo useradd --system --home /srv/schrodinger-portal --shell /usr/sbin/nologin schrodinger
-sudo chown -R schrodinger:schrodinger /srv/schrodinger-portal
+sudo useradd --system --home /srv/catwatch --shell /usr/sbin/nologin catwatch
+sudo chown -R catwatch:catwatch /srv/catwatch
 
-cat >/etc/systemd/system/schrodinger-portal.service <<'EOF'
+cat >/etc/systemd/system/catwatch.service <<'EOF'
 [Unit]
-Description=Schrodinger Portal - Service Navigation and Health Probe
+Description=CatWatch - Service Navigation and Health Probe
 After=network.target
 
 [Service]
 Type=simple
-User=schrodinger
-Group=schrodinger
-WorkingDirectory=/srv/schrodinger-portal
-ExecStart=/usr/bin/node /srv/schrodinger-portal/server.js
+User=catwatch
+Group=catwatch
+WorkingDirectory=/srv/catwatch
+ExecStart=/usr/bin/node /srv/catwatch/server.js
 Restart=always
 RestartSec=5
 Environment=PORT=3000
 Environment=NODE_ENV=production
-EnvironmentFile=-/etc/schrodinger-portal.env
+EnvironmentFile=-/etc/catwatch.env
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 # 口令和通知变量放在单独的文件里，权限设为仅 root 可读
-echo 'ADMIN_TOKEN=你的口令' | sudo tee /etc/schrodinger-portal.env
-sudo chmod 600 /etc/schrodinger-portal.env
+echo 'ADMIN_TOKEN=你的口令' | sudo tee /etc/catwatch.env
+sudo chmod 600 /etc/catwatch.env
 
 systemctl daemon-reload
-systemctl enable --now schrodinger-portal.service
-journalctl -u schrodinger-portal -f
+systemctl enable --now catwatch.service
+journalctl -u catwatch -f
 ```
 
 </details>
@@ -296,8 +296,8 @@ portal.example.com {
 ## 🔄 升级
 
 ```bash
-docker pull ghcr.io/uncat2310/schrodinger-portal:latest
-docker stop schrodinger-portal && docker rm schrodinger-portal
+docker pull ghcr.io/uncat2310/catwatch:latest
+docker stop catwatch && docker rm catwatch
 # 再执行一遍「快速开始」里的 docker run（保持同样的 -e 和 -v 参数）
 ```
 
@@ -376,7 +376,7 @@ npm run build && npm start   # 完整运行
 ```
 
 ```text
-schrodinger-portal/
+catwatch/
 ├── index.html / status.html     # 主页 / 公开状态页
 ├── server.js                    # 静态服务 + 服务端预渲染 + API + 后台探测
 ├── lib/                         # 服务端模块

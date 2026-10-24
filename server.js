@@ -345,7 +345,7 @@ async function probeHttpEndpoint(targetUrl, options = {}) {
           servername: hostname,
           headers: {
             Host: parsed.host,
-            'User-Agent': 'SchrodingerPortal/1.0 (+health-probe)',
+            'User-Agent': 'CatWatch/1.0 (+health-probe)',
             Accept: '*/*'
           }
         };
@@ -1247,7 +1247,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Schrödinger's Portal listening on :${PORT}`);
+  console.log(`CatWatch listening on :${PORT}`);
   console.log(`Admin editing: ${ADMIN_TOKEN ? 'enabled' : 'disabled (set ADMIN_TOKEN to enable)'}`);
   console.log(`Notify channels: ${notifier.channels.length ? notifier.channels.join(', ') : 'none'}`);
 });
