@@ -3,6 +3,7 @@
  * 只包含名称、状态、可用率与事件，不含任何 URL / hostname
  */
 import { escapeHtml } from './escape.js';
+import { renderIconBox } from './favicon.js';
 import { formatUptime, renderUptimeBars } from './uptime.js';
 import { formatDuration, formatRelative } from './time.js';
 
@@ -34,7 +35,7 @@ function renderRow(service, formatTime) {
   return `
     <li class="status-row">
       <div class="status-row-head">
-        <span class="status-row-name">${escapeHtml(service.title)}</span>
+        <span class="status-row-identity">${renderIconBox(service.title, service.icon || '', 'icon-md')}<span class="status-row-name">${escapeHtml(service.title)}</span></span>
         <span class="card-status-badge ${view.cls}"><span class="status-dot"></span><span class="status-text">${view.text}</span></span>
       </div>
       ${renderUptimeBars(service.bars ? service : null, formatTime)}

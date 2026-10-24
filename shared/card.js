@@ -5,7 +5,7 @@
  */
 import { escapeAttribute, escapeHtml } from './escape.js';
 import { renderIconBox } from './favicon.js';
-import { formatUptime } from './uptime.js';
+import { formatUptime, renderUptimeBars } from './uptime.js';
 import { formatRelative } from './time.js';
 
 const ICONS = {
@@ -53,18 +53,18 @@ export function renderProjectCard({ id, title, url, iconSrc, status, stripHtml =
 
   return `
     <li class="project-card" data-id="${safeId}" data-url="${safeHref}" tabindex="0" role="link"${style}>
-      <div class="card-identity">
-        ${renderIconBox(name, iconSrc)}
+      <div class="card-head">
+        ${renderIconBox(name, iconSrc, 'icon-lg')}
         <div class="card-text">
           <a class="card-title" href="${safeHref}" target="_blank" rel="noreferrer" tabindex="-1" title="${escapeAttribute(name)}"><span class="card-title-text">${escapeHtml(name)}</span>${svg('arrow', 'card-title-arrow')}</a>
           ${hostname ? `<span class="card-hostname">${escapeHtml(hostname)}</span>` : ''}
         </div>
+        <div class="card-status-badge ${escapeAttribute(badge.cls)}" id="status-${safeId}"${status ? '' : ' style="display:none"'}>
+          <span class="status-dot"></span>
+          <span class="status-text">${escapeHtml(badge.label)}</span>
+        </div>
       </div>
-      ${stripHtml}
-      <div class="card-status-badge ${escapeAttribute(badge.cls)}" id="status-${safeId}"${status ? '' : ' style="display:none"'}>
-        <span class="status-dot"></span>
-        <span class="status-text">${escapeHtml(badge.label)}</span>
-      </div>
+      ${stripHtml || '<p class="card-note">未启用健康探针</p>'}
       <div class="card-manage-actions">
         <button class="card-action-btn copy-btn" data-url="${safeHref}" title="复制链接" aria-label="复制链接" type="button">${svg('copy')}</button>
         <button class="card-action-btn edit-btn" data-id="${safeId}" title="编辑服务" aria-label="编辑服务" type="button">${svg('edit')}</button>
@@ -74,8 +74,53 @@ export function renderProjectCard({ id, title, url, iconSrc, status, stripHtml =
   `;
 }
 
+/** 把多个服务的 48 段历史按时段取平均，得到整体可用率与延迟序列 */
+export function aggregateSeries(summaries) {
+  const list = summaries.filter((s) => Array.isArray(s?.bars) && s.bars.length);
+  if (!list.length) return null;
+  const length = Math.max(...list.map((s) => s.bars.length));
+  const avg = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
+  return Array.from({ length }, (_, i) => ({
+    u: avg(list.map((s) => s.bars[i]?.u).filter((v) => typeof v === 'number')),
+    l: avg(list.map((s) => s.bars[i]?.l).filter((v) => typeof v === 'number'))
+  }));
+}
+
+export function renderDots(services) {
+  if (!services?.length) return '<span class="stat-empty">暂无启用探针的服务</span>';
+  return services
+    .map((s) => `<i class="svc-dot ${escapeAttribute(s.cls)}" title="${escapeAttribute(s.title)}"></i>`)
+    .join('');
+}
+
+export function renderSeriesBars(series) {
+  return renderUptimeBars(series ? { bars: series.map((p) => ({ t: 0, u: p.u, l: p.l })) } : null);
+}
+
+/** 延迟走势折线（48 个时段，空缺处断开） */
+export function renderSparkline(series) {
+  const points = (series || []).map((p, i) => ({ x: i, l: p.l })).filter((p) => typeof p.l === 'number');
+  if (points.length < 2) return '<span class="stat-empty">积累数据中</span>';
+  const max = Math.max(...points.map((p) => p.l));
+  const min = Math.min(...points.map((p) => p.l));
+  const span = max - min || 1;
+  const width = Math.max((series.length || 48) - 1, 1);
+  const y = (l) => (18 - ((l - min) / span) * 15).toFixed(2);
+
+  let line = '';
+  let prev = null;
+  for (const p of points) {
+    line += `${prev !== null && p.x === prev + 1 ? 'L' : 'M'}${p.x} ${y(p.l)} `;
+    prev = p.x;
+  }
+  const first = points[0];
+  const last = points[points.length - 1];
+  const area = `M${first.x} 20 ${line.replace(/M/g, 'L')}L${last.x} 20 Z`;
+  return `<svg class="sparkline" viewBox="0 0 ${width} 20" preserveAspectRatio="none" aria-hidden="true"><path class="sparkline-area" d="${area}"/><path class="sparkline-line" d="${line.trim()}" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
 /**
- * 观测栏各项的展示文本
+ * 观测卡片各项的展示文本
  * @param {object} m
  * @param {number} m.total
  * @param {number|null} m.online   null 表示尚未完成首轮探测
@@ -91,40 +136,48 @@ export function formatMetrics(m) {
   return {
     level,
     online: m.online == null ? '—' : String(m.online),
-    total: String(m.total),
+    total: String(m.pingable ?? m.total),
     uptime: formatUptime(m.uptime),
-    latency: m.latency == null ? '—' : `${Math.round(m.latency)} ms`,
-    event: m.event
-      ? `${m.event.title} ${m.event.type === 'down' ? '离线' : '恢复'} · ${formatRelative(m.event.at, m.now)}`
-      : '近 7 天无状态变化'
+    latency: m.latency == null ? '—' : String(Math.round(m.latency)),
+    eventTitle: m.event ? `${m.event.title} ${m.event.type === 'down' ? '离线' : '恢复'}` : '一切平稳',
+    eventTime: m.event ? formatRelative(m.event.at, m.now) : '近 7 天没有状态变化',
+    eventType: m.event ? m.event.type : 'none'
   };
 }
 
 export function renderPool({ cardsHtml, metrics }) {
   const v = formatMetrics(metrics);
   const list = cardsHtml
-    ? `<ul class="ledger">${cardsHtml}</ul>`
+    ? `<ul class="service-grid">${cardsHtml}</ul>`
     : '<p class="empty-category-notice">还没有服务。点击右上角「添加」开始。</p>';
 
   return `
-    <div class="observatory">
-      <div class="obs-cell obs-main">
-        <span class="obs-dot" id="metricDot" data-level="${v.level}"></span>
-        <span class="obs-value"><span id="metricOnline">${escapeHtml(v.online)}</span><span class="obs-of">/</span><span id="metricTotal">${escapeHtml(v.total)}</span></span>
-        <span class="obs-label">在线</span>
-      </div>
-      <div class="obs-cell">
-        <span class="obs-value" id="metricUptime">${escapeHtml(v.uptime)}</span>
-        <span class="obs-label">24h 可用率</span>
-      </div>
-      <div class="obs-cell">
-        <span class="obs-value" id="metricLatency">${escapeHtml(v.latency)}</span>
-        <span class="obs-label">平均延迟</span>
-      </div>
-      <div class="obs-cell obs-event">
-        <span class="obs-label">最近事件</span>
-        <span class="obs-event-text" id="metricEvent">${escapeHtml(v.event)}</span>
-      </div>
+    <section class="stats" aria-label="概览">
+      <article class="stat-tile">
+        <p class="stat-label"><span class="obs-dot" id="metricDot" data-level="${v.level}"></span>在线服务</p>
+        <p class="stat-value"><span id="metricOnline">${escapeHtml(v.online)}</span><span class="stat-of">/<span id="metricTotal">${escapeHtml(v.total)}</span></span></p>
+        <div class="stat-viz stat-dots" id="metricDots">${renderDots(metrics.services)}</div>
+      </article>
+      <article class="stat-tile">
+        <p class="stat-label">24 小时可用率</p>
+        <p class="stat-value" id="metricUptime">${escapeHtml(v.uptime)}</p>
+        <div class="stat-viz" id="metricUptimeViz">${renderSeriesBars(metrics.series)}</div>
+      </article>
+      <article class="stat-tile">
+        <p class="stat-label">平均延迟</p>
+        <p class="stat-value"><span id="metricLatency">${escapeHtml(v.latency)}</span><span class="stat-unit">ms</span></p>
+        <div class="stat-viz" id="metricLatencyViz">${renderSparkline(metrics.series)}</div>
+      </article>
+      <article class="stat-tile stat-event" id="metricEventTile" data-type="${escapeAttribute(v.eventType)}">
+        <p class="stat-label">最近事件</p>
+        <p class="stat-event-title" id="metricEvent">${escapeHtml(v.eventTitle)}</p>
+        <p class="stat-event-time" id="metricEventTime">${escapeHtml(v.eventTime)}</p>
+      </article>
+    </section>
+
+    <div class="section-bar">
+      <h2 class="section-title">服务</h2>
+      <span class="section-count">${escapeHtml(String(metrics.total))}</span>
       <button class="obs-refresh" id="refreshPingBtn" type="button" title="重新探测服务状态" aria-label="重新探测服务状态">${svg('refresh', 'btn-svg spin-on-click')}</button>
     </div>
     ${list}

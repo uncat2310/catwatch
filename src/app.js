@@ -2,8 +2,17 @@ import { DEFAULT_CONFIG } from './data/defaultConfig.js';
 import { PingService } from './services/pingService.js';
 import { escapeHtml } from '../shared/escape.js';
 import { getGreeting, formatDateLabel, formatClock } from '../shared/greeting.js';
-import { getProjectNativeFavicon, renderIconBox } from '../shared/favicon.js';
-import { renderProjectCard, renderPool, statusView, formatMetrics } from '../shared/card.js';
+import { browserIconFor, renderIconBox } from '../shared/favicon.js';
+import {
+  renderProjectCard,
+  renderPool,
+  statusView,
+  formatMetrics,
+  aggregateSeries,
+  renderDots,
+  renderSeriesBars,
+  renderSparkline
+} from '../shared/card.js';
 import { isValidHttpUrl, parseHttpUrl } from '../shared/url.js';
 import { renderUptimeInner, renderUptimeStrip } from '../shared/uptime.js';
 
@@ -17,6 +26,7 @@ const SAVE_ERROR_TEXT = {
   INVALID_URL: '存在无效的服务链接',
   INVALID_TITLE: '服务名称不能为空',
   INVALID_ID: '服务 ID 含有不支持的字符',
+  INVALID_ICON_URL: '图标地址无效',
   DUPLICATE_ID: '服务 ID 重复',
   TOO_MANY_PROJECTS: '服务数量超出上限',
   WRITE_FAILED: '服务器写入配置失败，请检查 config 目录权限',
@@ -54,18 +64,6 @@ function safeStorageSet(key, value) {
     // ignore
   }
 }
-
-const faviconCache = new Map();
-
-function cachedFavicon(url) {
-  if (!url) return '/favicon.svg';
-  if (faviconCache.has(url)) return faviconCache.get(url);
-  const icon = getProjectNativeFavicon(url);
-  faviconCache.set(url, icon);
-  return icon;
-}
-
-export { getProjectNativeFavicon };
 
 class App {
   constructor() {
@@ -179,7 +177,14 @@ class App {
   sameProjects(a, b) {
     const key = (list) =>
       JSON.stringify(
-        (list || []).map((p) => [p.id, p.title, parseHttpUrl(p.customWanUrl)?.href || '', p.pingEnabled !== false, p.statusPublic === true])
+        (list || []).map((p) => [
+          p.id,
+          p.title,
+          parseHttpUrl(p.customWanUrl)?.href || '',
+          p.pingEnabled !== false,
+          p.statusPublic === true,
+          p.iconUrl || ''
+        ])
       );
     return key(a) === key(b);
   }
@@ -496,6 +501,14 @@ class App {
     return isValidHttpUrl(candidate) ? candidate : '';
   }
 
+  /** 服务端配置中的服务由服务端代取图标；仅存在于本地的服务由浏览器直接加载 */
+  iconFor(project, targetUrl) {
+    if (this.pingService.hasBackend && this.isTrustedProject(project, targetUrl)) {
+      return `/api/icon/${encodeURIComponent(project.id)}`;
+    }
+    return browserIconFor(targetUrl, project.iconUrl);
+  }
+
   getHostname(url) {
     try {
       return new URL(url).hostname;
@@ -632,9 +645,8 @@ class App {
     const average = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
     const ids = new Set(projects.map((p) => p.id));
     const latencies = results.filter((st) => st.alive && typeof st.latency === 'number').map((st) => st.latency);
-    const uptimes = pingable
-      .map((p) => this.historySummaries[p.id]?.uptime24h)
-      .filter((u) => typeof u === 'number');
+    const summaries = pingable.map((p) => this.historySummaries[p.id]).filter(Boolean);
+    const uptimes = summaries.map((s) => s.uptime24h).filter((u) => typeof u === 'number');
 
     return {
       total: projects.length,
@@ -643,22 +655,34 @@ class App {
       uptime: average(uptimes),
       latency: average(latencies),
       event: this.historyEvents.find((e) => ids.has(e.id)) || null,
+      services: pingable.map((p) => ({ title: p.title || '未命名服务', cls: statusView(this.statusMap[p.id]).cls })),
+      series: aggregateSeries(summaries),
       now: Date.now()
     };
   }
 
   renderMetrics() {
-    const v = formatMetrics(this.collectMetrics());
+    const metrics = this.collectMetrics();
+    const v = formatMetrics(metrics);
     const set = (id, text) => {
       const el = document.getElementById(id);
       if (el) el.textContent = text;
+    };
+    const html = (id, markup) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = markup;
     };
     set('metricOnline', v.online);
     set('metricTotal', v.total);
     set('metricUptime', v.uptime);
     set('metricLatency', v.latency);
-    set('metricEvent', v.event);
+    set('metricEvent', v.eventTitle);
+    set('metricEventTime', v.eventTime);
+    html('metricDots', renderDots(metrics.services));
+    html('metricUptimeViz', renderSeriesBars(metrics.series));
+    html('metricLatencyViz', renderSparkline(metrics.series));
     document.getElementById('metricDot')?.setAttribute('data-level', v.level);
+    document.getElementById('metricEventTile')?.setAttribute('data-type', v.eventType);
   }
 
   updateMetrics() {
@@ -700,7 +724,7 @@ class App {
       id: project.id,
       title: project.title,
       url: targetUrl,
-      iconSrc: cachedFavicon(targetUrl),
+      iconSrc: this.iconFor(project, targetUrl),
       status: project.pingEnabled ? statusView(this.statusMap[project.id]) : null,
       stripHtml: this.hasUptimeStrip(project)
         ? renderUptimeStrip(project.id, this.historySummaries[project.id] || null, formatSlotTime)
@@ -929,6 +953,7 @@ class App {
       document.getElementById('formProjectId').value = proj.id;
       document.getElementById('formTitle').value = proj.title || '';
       document.getElementById('formCustomWan').value = proj.customWanUrl || '';
+      document.getElementById('formIconUrl').value = proj.iconUrl || '';
       document.getElementById('formPing').checked = Boolean(proj.pingEnabled);
       document.getElementById('formStatusPublic').checked = proj.statusPublic === true;
     } else {
@@ -936,6 +961,7 @@ class App {
       document.getElementById('formProjectId').value = '';
       document.getElementById('formTitle').value = '';
       document.getElementById('formCustomWan').value = '';
+      document.getElementById('formIconUrl').value = '';
       document.getElementById('formPing').checked = true;
       document.getElementById('formStatusPublic').checked = false;
     }
@@ -969,13 +995,21 @@ class App {
       return;
     }
 
+    const iconUrlRaw = document.getElementById('formIconUrl').value.trim();
+    const parsedIcon = iconUrlRaw ? parseHttpUrl(iconUrlRaw) : null;
+    if (iconUrlRaw && !parsedIcon) {
+      this.showToast('图标地址需要是 http:// 或 https:// 链接', '⚠️');
+      return;
+    }
+
     const projectData = {
       id,
       title,
       categoryId: 'services',
       customWanUrl: parsedUrl.href,
       pingEnabled,
-      statusPublic
+      statusPublic,
+      ...(parsedIcon ? { iconUrl: parsedIcon.href } : {})
     };
 
     const nextProjects = [...this.config.projects];
@@ -1046,7 +1080,7 @@ class App {
       .map((proj, idx) => {
         const isSelected = idx === this.selectedSearchResultIndex;
         const targetUrl = this.buildProjectUrl(proj);
-        const nativeFaviconUrl = cachedFavicon(targetUrl);
+        const nativeFaviconUrl = this.iconFor(proj, targetUrl);
         const title = proj.title || '未命名服务';
         const host = this.getHostname(targetUrl);
         return `
