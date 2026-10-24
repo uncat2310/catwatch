@@ -26,9 +26,9 @@
 
 ## 📖 项目简介
 
-**薛定谔的项目 (Schrödinger's Portal)** 是一个基于 **Vite + Vanilla JavaScript + Node.js** 的轻量个人服务器导航面板：用 Apple 风格卡片聚合常用服务，并通过服务端健康探针展示连通性与时延。
+**薛定谔的项目 (Schrödinger's Portal)** 是一个基于 **Vite + Vanilla JavaScript + Node.js** 的轻量个人服务器导航面板：用 Apple 风格卡片聚合常用服务，服务端持续探测并记录可用率，掉线和恢复时推送通知。
 
-适合自托管场景：开箱即用、镜像小、无数据库、无前端框架依赖。
+一句话：**好看的导航页 + 轻量版状态监控，一个容器搞定**。无数据库、无前端框架依赖。
 
 ---
 
@@ -38,8 +38,10 @@
 - 🧩 **Node.js 首屏预渲染**：服务端注入项目卡片，降低首屏空白。
 - 🔍 **Spotlight 搜索**：`Ctrl + K` / `⌘ K`，键盘导航与回车直达。
 - 💓 **服务端后台健康探针**：可信项目由服务端 daemon 探测；浏览器主要读取缓存；自定义项目才主动探测。
+- 📊 **24h 可用率条**：每张卡片显示近 24 小时（48 段 × 30 分钟）的可用情况与在线率，悬停查看延迟；历史保留 7 天并落盘。
+- 🔔 **掉线 / 恢复通知**：连续 3 次探测失败才判定离线（防抖），支持 Telegram、Bark、Server酱、通用 Webhook。
+- ☁️ **服务器同步编辑**：设置 `ADMIN_TOKEN` 后，页面上的增删改直接写回 `config/projects.json`，所有设备一致；未设置时保持浏览器本地编辑。
 - 🖼️ **自动 Favicon 识别**：自建服务优先同源路径；公开站点域名 fallback；失败回退本地图标。
-- 💾 **浏览器本地编辑**：添加 / 编辑 / 删除保存在当前浏览器 LocalStorage，不会自动改服务器配置，也不会多设备同步。
 - 🐳 **Docker / Compose / Node / PM2** 多种部署方式。
 
 ---
@@ -150,16 +152,23 @@ cp config/projects.example.json config/projects.json
 
 示例仅包含 `github.com` / `vercel.com` / `cloudflare.com` 等公开站点。
 
-Docker 挂载示例：
+Docker 挂载示例（推荐挂载**目录**，这样页面编辑可以写回，探测历史也能在重启后保留）：
 
 ```bash
+mkdir -p config data
+sudo chown -R 1000:1000 config data   # 容器内以 node 用户 (uid 1000) 运行
+
 docker run -d \
   --name schrodinger-portal \
   --restart unless-stopped \
   -p 3000:3000 \
-  -v "$PWD/config/projects.json:/app/config/projects.json:ro" \
+  -e ADMIN_TOKEN="$(openssl rand -hex 24)" \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/data:/app/data" \
   ghcr.io/uncat2310/schrodinger-portal:latest
 ```
+
+只想手工维护配置、不在页面上编辑时，也可以只读挂载单个文件：`-v "$PWD/config/projects.json:/app/config/projects.json:ro"`。
 
 ### 环境变量
 
@@ -169,32 +178,42 @@ docker run -d \
 | `CORS_ORIGIN` | 空 | 默认同源，不返回 `Access-Control-Allow-Origin: *`；需要跨域时显式设置 |
 | `ALLOW_INSECURE_TLS` | `false` | 为 `true` 时探针才忽略 TLS 证书错误；默认严格校验 |
 | `TRUST_PROXY` | `false` | 仅当服务位于**可信反向代理**之后，且后端端口不对公网直接暴露时，才设为 `true` 以信任 `X-Forwarded-For`；默认不信任客户端伪造的转发头 |
+| `ADMIN_TOKEN` | 空 | 管理口令。设置后启用「服务器模式」：页面增删改写回 `config/projects.json`。请使用足够长的随机串 |
+| `DATA_DIR` | `./data` | 探测历史 `history.json` 的存放目录 |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 空 | Telegram 通知（两者都要填） |
+| `BARK_URL` | 空 | Bark 通知，如 `https://api.day.app/<key>` |
+| `SERVERCHAN_SENDKEY` | 空 | Server酱 Turbo 通知 |
+| `NOTIFY_WEBHOOK_URL` | 空 | 通用 Webhook，POST JSON：`{ title, body, event }` |
 
 ---
 
 ## 💾 数据持久化说明
 
-本项目采用低冲突的双层数据源：
+服务列表有两种模式，取决于是否设置了 `ADMIN_TOKEN`：
 
-```text
-服务器 config/projects.json（或内置公开 Demo）
-        ↓
-   SSR 首次加载
+| | 服务器模式（设置了 `ADMIN_TOKEN`） | 本地模式（未设置） |
+| :--- | :--- | :--- |
+| 服务列表来源 | `config/projects.json` | `config/projects.json` 作为初始值，之后以浏览器 LocalStorage 为准 |
+| 页面上增删改 | 首次需输入管理口令，写回 `config/projects.json` | 只写入当前浏览器 |
+| 多设备同步 | ✅ | ❌ |
+| 可用率历史 / 通知 | ✅ 全部服务 | 仅 `config/projects.json` 中的服务 |
 
-浏览器内添加 / 编辑 / 删除
-        ↓
-   localStorage（按浏览器隔离）
-```
+- 管理口令保存在当前浏览器，可在「设置 → 服务器同步」中退出。
+- 从本地模式切换到服务器模式后，若浏览器里还留有旧的本地列表，可在「设置 → 服务器同步」中一键上传或丢弃。
+- 主题、标题等个人偏好始终只保存在浏览器。
+- 探测历史保存在 `DATA_DIR/history.json`，每 5 分钟及进程退出时写盘。
 
-请明确：
+---
 
-- 页面内编辑**默认只写入当前浏览器 LocalStorage**
-- **不会**自动修改服务器 `config/projects.json`
-- **不会**自动多设备同步
-- 清除站点数据会丢失浏览器侧修改
-- 需要服务端预设时，请手工维护 `config/projects.json`
+## 🔔 状态通知
 
-若 SSR 注入的项目与 LocalStorage 不一致，客户端会按 LocalStorage 重新渲染，避免错位接管。
+服务端每 12 秒探测一次 `config/projects.json` 中启用探针的服务：
+
+- **连续 3 次失败**（约 36 秒）才判定为不可用并通知，单次抖动不会打扰你
+- 恢复后第一次成功即发送恢复通知，并附上中断时长
+- 状态写入历史文件，重启后不会重复通知同一次故障
+
+配置任意通知渠道的环境变量即可启用；登录管理后可在「设置 → 服务器同步」中发送测试通知。
 
 ---
 
@@ -292,8 +311,9 @@ schrodinger-portal/
 ├── config/
 │   └── projects.example.json    # 公开示例配置（复制为 projects.json）
 ├── docs/screenshots/            # README 真实界面截图
-├── shared/                      # 前后端共用小工具（转义 / URL / 问候 / favicon / SSRF）
-├── test/                        # node:test 安全烟测
+├── shared/                      # 前后端共用小工具（转义 / URL / 问候 / favicon / SSRF / 可用率条）
+├── lib/                         # 服务端模块：探测历史、通知、配置写入
+├── test/                        # node:test 单元测试
 ├── src/
 │   ├── data/defaultConfig.js    # 前端默认配置
 │   ├── services/pingService.js  # 前端探针客户端

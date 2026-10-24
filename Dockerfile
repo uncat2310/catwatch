@@ -12,12 +12,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-RUN mkdir -p /app/config \
+RUN mkdir -p /app/config /app/data \
   && chown -R node:node /app
 
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/server.js ./server.js
 COPY --from=builder --chown=node:node /app/shared ./shared
+COPY --from=builder --chown=node:node /app/lib ./lib
 COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/config/projects.example.json ./config/projects.example.json
 

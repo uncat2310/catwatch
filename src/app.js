@@ -4,10 +4,55 @@ import { escapeHtml, escapeAttribute } from '../shared/escape.js';
 import { getGreeting } from '../shared/greeting.js';
 import { getProjectNativeFavicon } from '../shared/favicon.js';
 import { isValidHttpUrl, parseHttpUrl } from '../shared/url.js';
+import { renderUptimeInner, renderUptimeStrip } from '../shared/uptime.js';
 
 const STORAGE_KEY = 'SCHRODINGER_PORTAL';
 const LEGACY_STORAGE_KEY = 'SCHRODINGER_PORTAL_V18';
+const ADMIN_TOKEN_KEY = 'SCHRODINGER_PORTAL_ADMIN_TOKEN';
 const SCHEMA_VERSION = 1;
+const HISTORY_REFRESH_MS = 60 * 1000;
+
+const SAVE_ERROR_TEXT = {
+  INVALID_URL: '存在无效的服务链接',
+  INVALID_TITLE: '服务名称不能为空',
+  INVALID_ID: '服务 ID 含有不支持的字符',
+  DUPLICATE_ID: '服务 ID 重复',
+  TOO_MANY_PROJECTS: '服务数量超出上限',
+  WRITE_FAILED: '服务器写入配置失败，请检查 config 目录权限',
+  RATE_LIMITED: '操作过于频繁，请稍后再试'
+};
+
+function readJsonScript(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  try {
+    return JSON.parse(el.textContent);
+  } catch {
+    return null;
+  }
+}
+
+function formatSlotTime(ms) {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function safeStorageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key, value) {
+  try {
+    if (value == null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
 
 const faviconCache = new Map();
 
@@ -33,6 +78,9 @@ class App {
     this.clockTimer = null;
     this.lastFocusedBeforeModal = null;
     this.subtitleRevealed = false;
+    this.historySummaries = {};
+    this.historyTimer = null;
+    this.authResolver = null;
 
     this.pingService = new PingService((statusMap) => {
       this.statusMap = statusMap;
@@ -49,27 +97,21 @@ class App {
   /* -------------------------------------------------------------------------- */
 
   loadState() {
+    const meta = readJsonScript('portal-meta') || {};
+    // 服务器模式：服务端设置了 ADMIN_TOKEN，项目列表以服务器为准
+    this.serverMode = Boolean(meta.adminEnabled);
+    this.notifyChannels = Array.isArray(meta.notifyChannels) ? meta.notifyChannels : [];
+    this.adminToken = this.serverMode ? safeStorageGet(ADMIN_TOKEN_KEY) : null;
+
+    const parsedSsr = readJsonScript('initial-projects-data');
     let ssrProjects = null;
-    const ssrEl = document.getElementById('initial-projects-data');
-    if (ssrEl) {
-      try {
-        const parsed = JSON.parse(ssrEl.textContent);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          ssrProjects = parsed;
-        }
-      } catch {
-        // ignore
-      }
+    if (Array.isArray(parsedSsr) && (parsedSsr.length > 0 || this.serverMode)) {
+      ssrProjects = parsedSsr;
     }
 
     this.ssrProjects = ssrProjects;
-    this.trustedUrlById = new Map();
-    for (const project of ssrProjects || DEFAULT_CONFIG.projects) {
-      if (project?.id && project?.customWanUrl) {
-        const parsed = parseHttpUrl(project.customWanUrl);
-        if (parsed) this.trustedUrlById.set(project.id, parsed.href);
-      }
-    }
+    this.setTrustedProjects(ssrProjects || DEFAULT_CONFIG.projects);
+    this.localOnlyProjects = null;
 
     try {
       let saved = localStorage.getItem(STORAGE_KEY);
@@ -90,6 +132,14 @@ class App {
         if (!this.config.settings) this.config.settings = DEFAULT_CONFIG.settings;
         this.config.categories = DEFAULT_CONFIG.categories;
         this.config.schemaVersion = SCHEMA_VERSION;
+        if (this.serverMode && ssrProjects) {
+          // 保留旧的本地列表，供登录后一次性迁移到服务器
+          const local = this.config.projects;
+          if (!this.sameProjects(local, ssrProjects) && !this.sameProjects(local, DEFAULT_CONFIG.projects)) {
+            this.localOnlyProjects = this.config.projects;
+          }
+          this.config.projects = ssrProjects;
+        }
       } else {
         this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
         this.config.schemaVersion = SCHEMA_VERSION;
@@ -108,7 +158,246 @@ class App {
 
   persistState() {
     this.config.schemaVersion = SCHEMA_VERSION;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+    const snapshot = this.serverMode
+      ? { ...this.config, projects: this.localOnlyProjects || undefined }
+      : this.config;
+    safeStorageSet(STORAGE_KEY, JSON.stringify(snapshot));
+  }
+
+  setTrustedProjects(projects) {
+    this.trustedUrlById = new Map();
+    for (const project of projects) {
+      if (project?.id && project?.customWanUrl) {
+        const parsed = parseHttpUrl(project.customWanUrl);
+        if (parsed) this.trustedUrlById.set(project.id, parsed.href);
+      }
+    }
+  }
+
+  sameProjects(a, b) {
+    const key = (list) =>
+      JSON.stringify((list || []).map((p) => [p.id, p.title, parseHttpUrl(p.customWanUrl)?.href || '', p.pingEnabled !== false]));
+    return key(a) === key(b);
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /* Server sync                                                                */
+  /* -------------------------------------------------------------------------- */
+
+  /** 保存项目列表：服务器模式写回 config/projects.json，本地模式写 LocalStorage */
+  async commitProjects(nextProjects) {
+    if (!this.serverMode) {
+      this.config.projects = nextProjects;
+      this.persistState();
+      return true;
+    }
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const token = await this.ensureAdminToken();
+      if (!token) return false;
+
+      let res;
+      try {
+        res = await fetch('/api/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ projects: nextProjects }),
+          signal: AbortSignal.timeout(8000)
+        });
+      } catch {
+        this.showToast('无法连接服务器，修改未保存', '⚠️');
+        return false;
+      }
+
+      if (res.status === 401) {
+        this.setAdminToken(null);
+        this.showToast('管理口令已失效，请重新输入', '🔒');
+        continue;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data.projects)) {
+        this.showToast(SAVE_ERROR_TEXT[data.error] || '保存失败', '⚠️');
+        return false;
+      }
+
+      this.config.projects = data.projects;
+      this.setTrustedProjects(data.projects);
+      return true;
+    }
+    return false;
+  }
+
+  setAdminToken(token) {
+    this.adminToken = token || null;
+    safeStorageSet(ADMIN_TOKEN_KEY, this.adminToken);
+    this.renderAdminStatus();
+  }
+
+  async verifyAdminToken(token) {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (res.ok) return 'ok';
+      if (res.status === 429) return 'rate_limited';
+      return 'invalid';
+    } catch {
+      return 'network';
+    }
+  }
+
+  /** 返回已保存的口令；没有则弹出登录框等待输入 */
+  ensureAdminToken() {
+    if (this.adminToken) return Promise.resolve(this.adminToken);
+    return new Promise((resolve) => {
+      this.authResolver = resolve;
+      const input = document.getElementById('authTokenInput');
+      if (input) input.value = '';
+      const errorEl = document.getElementById('authError');
+      if (errorEl) errorEl.textContent = '';
+      this.openOverlay('authModalOverlay', '#authTokenInput');
+    });
+  }
+
+  async handleAuthSubmit() {
+    const input = document.getElementById('authTokenInput');
+    const errorEl = document.getElementById('authError');
+    const token = input?.value.trim() || '';
+    if (!token) return;
+
+    const verdict = await this.verifyAdminToken(token);
+    if (verdict !== 'ok') {
+      if (errorEl) {
+        errorEl.textContent =
+          verdict === 'invalid' ? '口令不正确' : verdict === 'rate_limited' ? '尝试过于频繁，请稍后再试' : '无法连接服务器';
+      }
+      return;
+    }
+
+    this.setAdminToken(token);
+    const resolve = this.authResolver;
+    this.authResolver = null;
+    this.closeOverlay('authModalOverlay');
+    this.showToast('已进入管理模式', '🔓');
+    if (resolve) resolve(token);
+  }
+
+  cancelAuth() {
+    const resolve = this.authResolver;
+    this.authResolver = null;
+    this.closeOverlay('authModalOverlay');
+    if (resolve) resolve(null);
+  }
+
+  /** 把本浏览器以前在本地模式下保存的服务列表上传到服务器 */
+  async migrateLocalProjects() {
+    const local = this.localOnlyProjects;
+    if (!local) return;
+    if (!confirm(`将用此浏览器保存的 ${local.length} 个本地服务覆盖服务器上的列表，确定吗？`)) return;
+    if (!(await this.commitProjects(local))) return;
+    this.localOnlyProjects = null;
+    this.persistState();
+    this.closeSettingsModal();
+    this.renderProjectPool();
+    this.showToast('本地服务已同步到服务器', '☁️');
+  }
+
+  discardLocalProjects() {
+    if (!confirm('丢弃此浏览器保存的本地服务列表？服务器上的列表不受影响。')) return;
+    this.localOnlyProjects = null;
+    this.persistState();
+    this.renderAdminStatus();
+  }
+
+  renderAdminStatus() {
+    const box = document.getElementById('adminStatus');
+    if (!box) return;
+    const text = box.querySelector('.admin-status-text');
+    const loginBtn = document.getElementById('adminLoginBtn');
+    const logoutBtn = document.getElementById('adminLogoutBtn');
+    const testBtn = document.getElementById('notifyTestBtn');
+    const migrateRow = document.getElementById('migrateRow');
+    if (migrateRow) {
+      migrateRow.hidden = !(this.serverMode && this.localOnlyProjects);
+      const label = migrateRow.querySelector('.migrate-text');
+      if (label && this.localOnlyProjects) {
+        label.textContent = `此浏览器还保存着 ${this.localOnlyProjects.length} 个旧的本地服务。`;
+      }
+    }
+
+    if (!this.serverMode) {
+      text.textContent = '本地模式：修改只保存在当前浏览器。服务端设置 ADMIN_TOKEN 后可同步到服务器。';
+      [loginBtn, logoutBtn, testBtn].forEach((btn) => btn && (btn.hidden = true));
+      return;
+    }
+
+    const channels = this.notifyChannels.length ? this.notifyChannels.join(' / ') : '未配置';
+    text.textContent = this.adminToken
+      ? `服务器模式 · 已登录，修改会写入服务器。通知通道：${channels}`
+      : '服务器模式 · 未登录，添加或编辑服务时需要管理口令。';
+    if (loginBtn) loginBtn.hidden = Boolean(this.adminToken);
+    if (logoutBtn) logoutBtn.hidden = !this.adminToken;
+    if (testBtn) testBtn.hidden = !this.adminToken || this.notifyChannels.length === 0;
+  }
+
+  async sendTestNotification() {
+    const token = await this.ensureAdminToken();
+    if (!token) return;
+    try {
+      const res = await fetch('/api/notify/test', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        this.showToast('测试通知发送失败', '⚠️');
+        return;
+      }
+      const failed = (data.results || []).filter((r) => !r.ok).map((r) => r.channel);
+      this.showToast(failed.length ? `部分通道失败：${failed.join(', ')}` : '测试通知已发送', failed.length ? '⚠️' : '🔔');
+    } catch {
+      this.showToast('无法连接服务器', '⚠️');
+    }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /* Uptime history                                                             */
+  /* -------------------------------------------------------------------------- */
+
+  async refreshHistory() {
+    if (!this.pingService.hasBackend || document.visibilityState === 'hidden') return;
+    try {
+      const res = await fetch('/api/history', { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return;
+      const data = await res.json();
+      this.historySummaries = data?.services || {};
+      this.updateUptimeStrips();
+    } catch {
+      // ignore
+    }
+  }
+
+  startHistoryPolling() {
+    if (!this.pingService.hasBackend) return;
+    this.refreshHistory();
+    this.historyTimer = setInterval(() => this.refreshHistory(), HISTORY_REFRESH_MS);
+  }
+
+  /** 只有服务端可信项目才有历史；本地自定义项目不显示可用率条 */
+  hasUptimeStrip(project) {
+    return project.pingEnabled !== false && this.isTrustedProject(project, this.buildProjectUrl(project));
+  }
+
+  updateUptimeStrips() {
+    this.config.projects.forEach((project) => {
+      const el = document.getElementById(`uptime-${project.id}`);
+      if (!el) return;
+      el.innerHTML = renderUptimeInner(this.historySummaries[project.id] || null, formatSlotTime);
+    });
   }
 
   isTrustedProject(project, url) {
@@ -161,6 +450,9 @@ class App {
       this.renderProjectPool();
       this.renderHeader();
     }
+
+    this.startHistoryPolling();
+    this.renderAdminStatus();
 
     if (this.config.settings.autoPing) {
       this.pingService.start(
@@ -463,6 +755,7 @@ class App {
             <span class="status-text">检测中</span>
           </div>
         </div>
+        ${this.hasUptimeStrip(project) ? renderUptimeStrip(project.id, this.historySummaries[project.id] || null, formatSlotTime) : ''}
         <div class="card-footer">
           <div class="card-manage-actions">
             <button class="card-action-btn copy-btn" data-url="${escapeAttribute(href)}" title="复制直达链接" type="button">
@@ -563,11 +856,12 @@ class App {
         const id = deleteBtn.getAttribute('data-id');
         const proj = this.config.projects.find((p) => p.id === id);
         if (confirm(`确定要移除服务「${proj ? proj.title : id}」吗？`)) {
-          this.config.projects = this.config.projects.filter((p) => p.id !== id);
-          delete this.statusMap[id];
-          this.persistState();
-          this.renderProjectPool();
-          this.showToast('服务已移除', '🗑️');
+          this.commitProjects(this.config.projects.filter((p) => p.id !== id)).then((ok) => {
+            if (!ok) return;
+            delete this.statusMap[id];
+            this.renderProjectPool();
+            this.showToast('服务已移除', '🗑️');
+          });
         }
         return;
       }
@@ -632,6 +926,23 @@ class App {
     document.getElementById('closeSettingsModalBtn')?.addEventListener('click', () => this.closeSettingsModal());
     document.getElementById('cancelSettingsBtn')?.addEventListener('click', () => this.closeSettingsModal());
     document.getElementById('saveSettingsBtn')?.addEventListener('click', () => this.saveSettings());
+    document.getElementById('closeAuthModalBtn')?.addEventListener('click', () => this.cancelAuth());
+    document.getElementById('cancelAuthBtn')?.addEventListener('click', () => this.cancelAuth());
+    document.getElementById('authForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.handleAuthSubmit();
+    });
+    document.getElementById('adminLoginBtn')?.addEventListener('click', () => {
+      this.closeSettingsModal();
+      this.ensureAdminToken();
+    });
+    document.getElementById('adminLogoutBtn')?.addEventListener('click', () => {
+      this.setAdminToken(null);
+      this.showToast('已退出管理模式', '🔒');
+    });
+    document.getElementById('notifyTestBtn')?.addEventListener('click', () => this.sendTestNotification());
+    document.getElementById('migrateLocalBtn')?.addEventListener('click', () => this.migrateLocalProjects());
+    document.getElementById('discardLocalBtn')?.addEventListener('click', () => this.discardLocalProjects());
 
     document.getElementById('projectForm')?.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -722,7 +1033,7 @@ class App {
     this.closeOverlay('projectModalOverlay');
   }
 
-  handleProjectFormSubmit() {
+  async handleProjectFormSubmit() {
     const id = document.getElementById('formProjectId').value || `proj-${Date.now()}`;
     const title = document.getElementById('formTitle').value.trim();
     const customWanUrlRaw = document.getElementById('formCustomWan').value.trim();
@@ -747,17 +1058,22 @@ class App {
       pingEnabled
     };
 
-    const existingIndex = this.config.projects.findIndex((p) => p.id === id);
+    const nextProjects = [...this.config.projects];
+    const existingIndex = nextProjects.findIndex((p) => p.id === id);
     if (existingIndex >= 0) {
-      this.config.projects[existingIndex] = projectData;
-      this.showToast(`服务「${title}」修改已保存`, '💾');
+      nextProjects[existingIndex] = projectData;
     } else {
-      this.config.projects.unshift(projectData);
-      this.showToast(`新服务「${title}」已添加`, '✨');
+      nextProjects.unshift(projectData);
     }
 
+    const saveBtn = document.getElementById('saveProjectBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    const ok = await this.commitProjects(nextProjects);
+    if (saveBtn) saveBtn.disabled = false;
+    if (!ok) return;
+
+    this.showToast(existingIndex >= 0 ? `服务「${title}」修改已保存` : `新服务「${title}」已添加`, existingIndex >= 0 ? '💾' : '✨');
     this.closeProjectModal();
-    this.persistState();
     this.renderProjectPool();
 
     this.pingService.probeService(projectData, parsedUrl.href).then((res) => {
@@ -876,6 +1192,7 @@ class App {
     const cfgSubtitle = document.getElementById('cfgSubtitle');
     if (cfgTitle) cfgTitle.value = p.title || '薛定谔的项目';
     if (cfgSubtitle) cfgSubtitle.value = p.subtitle || '心之所向，触手可及';
+    this.renderAdminStatus();
     this.openOverlay('settingsModalOverlay', '#cfgTitle');
   }
 
@@ -898,6 +1215,9 @@ class App {
     this.closeProjectModal();
     this.closeSearchModal();
     this.closeSettingsModal();
+    if (document.getElementById('authModalOverlay')?.classList.contains('active')) {
+      this.cancelAuth();
+    }
   }
 }
 

@@ -11,6 +11,10 @@ import { getGreeting } from './shared/greeting.js';
 import { getProjectNativeFavicon } from './shared/favicon.js';
 import { parseHttpUrl } from './shared/url.js';
 import { validateProbeTarget, createPinnedLookup } from './shared/ssrf.js';
+import { renderUptimeStrip } from './shared/uptime.js';
+import { HistoryStore } from './lib/history.js';
+import { createNotifier } from './lib/notify.js';
+import { sanitizeProjects, writeJsonAtomic, tokenMatches, readBearerToken } from './lib/store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,8 +25,15 @@ const INDEX_FILE = path.join(DIST_DIR, 'index.html');
 const CORS_ORIGIN = (process.env.CORS_ORIGIN || '').trim();
 const ALLOW_INSECURE_TLS = String(process.env.ALLOW_INSECURE_TLS || 'false').toLowerCase() === 'true';
 const TRUST_PROXY = String(process.env.TRUST_PROXY || 'false').toLowerCase() === 'true';
+const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || '').trim();
+const CONFIG_PATH = path.join(__dirname, 'config', 'projects.json');
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
+const HISTORY_PATH = path.join(DATA_DIR, 'history.json');
 
 const MAX_BODY_BYTES = 32 * 1024;
+const MAX_PROJECTS_BODY_BYTES = 256 * 1024;
+const HISTORY_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+const BACKGROUND_CHECK_INTERVAL_MS = 12000;
 const MAX_BATCH_SIZE = 30;
 const MAX_ID_LENGTH = 64;
 const MAX_URL_LENGTH = 2048;
@@ -37,6 +48,10 @@ const RATE_LIMIT_MAX = 45;
 if (!fs.existsSync(INDEX_FILE)) {
   console.error('Production build not found. Run npm run build first.');
   process.exit(1);
+}
+
+if (ADMIN_TOKEN && ADMIN_TOKEN.length < 12) {
+  console.warn('ADMIN_TOKEN is shorter than 12 characters; use a long random token.');
 }
 
 /**
@@ -77,16 +92,16 @@ let projectsCache = {
 };
 
 function loadServerProjects() {
-  const customConfigPath = path.join(__dirname, 'config', 'projects.json');
   try {
-    if (fs.existsSync(customConfigPath)) {
-      const stat = fs.statSync(customConfigPath);
+    if (fs.existsSync(CONFIG_PATH)) {
+      const stat = fs.statSync(CONFIG_PATH);
       if (projectsCache.projects && projectsCache.mtimeMs === stat.mtimeMs) {
         return projectsCache.projects;
       }
-      const content = fs.readFileSync(customConfigPath, 'utf-8');
+      const content = fs.readFileSync(CONFIG_PATH, 'utf-8');
       const data = JSON.parse(content);
-      if (Array.isArray(data) && data.length > 0) {
+      // 管理员通过页面清空列表时文件为 []，同样视为有效配置
+      if (Array.isArray(data)) {
         const trustedById = new Map();
         for (const project of data) {
           if (project?.id && typeof project.id === 'string') {
@@ -110,6 +125,14 @@ function loadServerProjects() {
   }
   projectsCache = { mtimeMs: null, projects: PUBLIC_DEMO_PROJECTS, trustedById };
   return PUBLIC_DEMO_PROJECTS;
+}
+
+function saveServerProjects(projects) {
+  writeJsonAtomic(CONFIG_PATH, projects);
+  projectsCache = { mtimeMs: null, projects: null, trustedById: null };
+  const saved = loadServerProjects();
+  historyStore.prune(new Set(saved.map((p) => p.id)));
+  return saved;
 }
 
 function getTrustedProjectMap() {
@@ -380,23 +403,70 @@ async function probeHttpEndpoint(targetUrl, options = {}) {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* 探测历史 / 状态通知                                                         */
+/* -------------------------------------------------------------------------- */
+
+function loadHistoryStore() {
+  try {
+    if (fs.existsSync(HISTORY_PATH)) {
+      return HistoryStore.fromJSON(JSON.parse(fs.readFileSync(HISTORY_PATH, 'utf-8')));
+    }
+  } catch (err) {
+    console.warn('Failed to load history, starting fresh:', err?.message || err);
+  }
+  return new HistoryStore();
+}
+
+const historyStore = loadHistoryStore();
+const notifier = createNotifier();
+
+function saveHistory() {
+  if (!historyStore.dirty) return;
+  try {
+    writeJsonAtomic(HISTORY_PATH, historyStore.toJSON());
+    historyStore.dirty = false;
+  } catch (err) {
+    console.warn('Failed to save history:', err?.message || err);
+  }
+}
+
+function dispatchEvent(event) {
+  console.log(`[status] ${event.title} → ${event.type}${event.error ? ` (${event.error})` : ''}`);
+  if (!notifier.enabled) return;
+  notifier.send(event).then((results) => {
+    for (const r of results) {
+      if (!r.ok) console.warn(`[notify] ${r.channel} failed: ${r.error}`);
+    }
+  });
+}
+
 async function runBackgroundHealthCheck() {
   if (healthCheckRunning) return;
   healthCheckRunning = true;
   try {
-    const projects = loadServerProjects().filter((p) => p.customWanUrl && p.pingEnabled !== false);
+    const allProjects = loadServerProjects();
+    historyStore.prune(new Set(allProjects.map((p) => p.id)));
+    const projects = allProjects.filter((p) => p.customWanUrl && p.pingEnabled !== false);
     await mapPool(projects, BATCH_PROBE_CONCURRENCY, async (proj) => {
       const res = await probeHttpEndpoint(proj.customWanUrl, {
         timeoutMs: 2500,
         trusted: true
       });
-      setHealthCache(proj.id, {
+      const entry = {
         alive: Boolean(res.alive),
         latency: res.latency || null,
         statusCode: res.statusCode || null,
         error: res.error || null,
         lastChecked: Date.now()
-      });
+      };
+      setHealthCache(proj.id, entry);
+      const event = historyStore.record(
+        { id: proj.id, title: proj.title, url: canonicalUrl(proj.customWanUrl) },
+        entry,
+        entry.lastChecked
+      );
+      if (event) dispatchEvent(event);
     });
   } finally {
     healthCheckRunning = false;
@@ -407,7 +477,22 @@ async function runBackgroundHealthCheck() {
 runBackgroundHealthCheck();
 setInterval(() => {
   runBackgroundHealthCheck();
-}, 12000);
+}, BACKGROUND_CHECK_INTERVAL_MS);
+setInterval(saveHistory, HISTORY_SAVE_INTERVAL_MS).unref?.();
+
+function buildHistoryPayload() {
+  const now = Date.now();
+  const services = {};
+  for (const project of loadServerProjects()) {
+    const summary = historyStore.summary(project.id, now);
+    if (summary) services[project.id] = summary;
+  }
+  return { now, services, events: historyStore.recentEvents(20) };
+}
+
+function isAdminRequest(req) {
+  return Boolean(ADMIN_TOKEN) && tokenMatches(ADMIN_TOKEN, readBearerToken(req));
+}
 
 /* -------------------------------------------------------------------------- */
 /* SSR                                                                       */
@@ -462,6 +547,8 @@ function renderCardHtml(project) {
           <span class="status-text">${escapeHtml(statusLabel)}</span>
         </div>
       </div>
+
+      ${project.pingEnabled !== false ? renderUptimeStrip(project.id, null) : ''}
 
       <div class="card-footer">
         <div class="card-manage-actions">
@@ -544,7 +631,10 @@ function renderPageSSR(htmlTemplate) {
     </div>
   `;
 
-  const injectedScript = `<script id="initial-projects-data" type="application/json">${safeJsonForHtmlScript(projects)}</script>`;
+  const portalMeta = { adminEnabled: Boolean(ADMIN_TOKEN), notifyChannels: notifier.channels };
+  const injectedScript =
+    `<script id="initial-projects-data" type="application/json">${safeJsonForHtmlScript(projects)}</script>` +
+    `<script id="portal-meta" type="application/json">${safeJsonForHtmlScript(portalMeta)}</script>`;
   const poolReplacement = `<section class="project-pool" id="projectPool">${poolHtml}</section>${injectedScript}`;
 
   // 兼容 dist 中 CRLF / LF
@@ -619,7 +709,7 @@ function applyCors(req, res) {
   } else {
     return false;
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   return true;
 }
@@ -767,8 +857,100 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         status: 'ok',
         ssr: true,
-        cachedCount: HEALTH_CACHE.size
+        cachedCount: HEALTH_CACHE.size,
+        adminEnabled: Boolean(ADMIN_TOKEN)
       });
+      return;
+    }
+
+    // 服务端项目的 24h / 7d 可用率与最近状态事件
+    if (pathname === '/api/history' && req.method === 'GET') {
+      sendJson(res, 200, buildHistoryPayload());
+      return;
+    }
+
+    // 校验管理口令（前端登录用）
+    if (pathname === '/api/auth' && req.method === 'POST') {
+      if (!ADMIN_TOKEN) {
+        sendJson(res, 404, { error: 'ADMIN_DISABLED' });
+        return;
+      }
+      if (!checkRateLimit(getClientIp(req))) {
+        sendJson(res, 429, { error: 'RATE_LIMITED' });
+        return;
+      }
+      if (!isAdminRequest(req)) {
+        sendJson(res, 401, { error: 'UNAUTHORIZED' });
+        return;
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    // 整体替换服务端项目列表（需管理口令）
+    if (pathname === '/api/projects' && req.method === 'PUT') {
+      if (!ADMIN_TOKEN) {
+        sendJson(res, 404, { error: 'ADMIN_DISABLED' });
+        return;
+      }
+      if (!checkRateLimit(getClientIp(req))) {
+        sendJson(res, 429, { error: 'RATE_LIMITED' });
+        return;
+      }
+      if (!isAdminRequest(req)) {
+        sendJson(res, 401, { error: 'UNAUTHORIZED' });
+        return;
+      }
+
+      let body;
+      try {
+        body = await parseJsonBody(req, MAX_PROJECTS_BODY_BYTES);
+      } catch (err) {
+        if (err?.code === 'BODY_TOO_LARGE') {
+          sendJson(res, 413, { error: 'BODY_TOO_LARGE' });
+          return;
+        }
+        sendJson(res, 400, { error: 'INVALID_JSON' });
+        return;
+      }
+
+      const result = sanitizeProjects(body?.projects);
+      if (!result.ok) {
+        sendJson(res, 400, { error: result.error });
+        return;
+      }
+
+      try {
+        const saved = saveServerProjects(result.projects);
+        runBackgroundHealthCheck();
+        sendJson(res, 200, { projects: saved });
+      } catch (err) {
+        console.error('Failed to write projects.json:', err);
+        sendJson(res, 500, { error: 'WRITE_FAILED' });
+      }
+      return;
+    }
+
+    // 发送一条测试通知（需管理口令）
+    if (pathname === '/api/notify/test' && req.method === 'POST') {
+      if (!ADMIN_TOKEN) {
+        sendJson(res, 404, { error: 'ADMIN_DISABLED' });
+        return;
+      }
+      if (!checkRateLimit(getClientIp(req))) {
+        sendJson(res, 429, { error: 'RATE_LIMITED' });
+        return;
+      }
+      if (!isAdminRequest(req)) {
+        sendJson(res, 401, { error: 'UNAUTHORIZED' });
+        return;
+      }
+      if (!notifier.enabled) {
+        sendJson(res, 400, { error: 'NO_CHANNELS' });
+        return;
+      }
+      const results = await notifier.send({ type: 'test', at: Date.now() });
+      sendJson(res, 200, { results });
       return;
     }
 
@@ -966,7 +1148,18 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Schrödinger's Portal listening on :${PORT}`);
+  console.log(`Admin editing: ${ADMIN_TOKEN ? 'enabled' : 'disabled (set ADMIN_TOKEN to enable)'}`);
+  console.log(`Notify channels: ${notifier.channels.length ? notifier.channels.join(', ') : 'none'}`);
 });
+
+// Docker 中 node 为 PID 1，需要自行处理信号；退出前落盘历史
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    saveHistory();
+    server.close();
+    process.exit(0);
+  });
+}
 
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
