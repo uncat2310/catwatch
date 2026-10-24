@@ -14,6 +14,15 @@ services:
       # - ALLOW_INSECURE_TLS=false
       # 可选：显式跨域来源（默认同源，不返回 CORS *）
       # - CORS_ORIGIN=https://portal.example.com
-    # 可选：挂载私有项目配置（不要提交真实域名到公开仓库）
+      # 可选：管理口令，设置后可在页面上增删改服务并写回 config/projects.json
+      # - ADMIN_TOKEN=请替换为一串足够长的随机字符串
+      # 可选：服务掉线 / 恢复通知（任选其一或多个）
+      # - TELEGRAM_BOT_TOKEN=
+      # - TELEGRAM_CHAT_ID=
+      # - BARK_URL=https://api.day.app/your-key
+      # - SERVERCHAN_SENDKEY=
+      # - NOTIFY_WEBHOOK_URL=
+    # 推荐挂载：config 存服务列表，data 存探测历史（宿主目录需对 uid 1000 可写）
     # volumes:
-    #   - ./config/projects.json:/app/config/projects.json:ro
+    #   - ./config:/app/config
+    #   - ./data:/app/data

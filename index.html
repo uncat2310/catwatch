@@ -228,11 +228,50 @@
             </div>
           </div>
         </div>
+
+        <div class="settings-section admin-section" id="adminStatus">
+          <div class="form-label">服务器同步</div>
+          <p class="admin-status-text">本地模式：修改只保存在当前浏览器。</p>
+          <div class="admin-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="adminLoginBtn" hidden>输入管理口令</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="notifyTestBtn" hidden>发送测试通知</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="adminLogoutBtn" hidden>退出管理</button>
+          </div>
+          <div class="admin-migrate" id="migrateRow" hidden>
+            <span class="migrate-text"></span>
+            <div class="admin-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="migrateLocalBtn">上传到服务器</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="discardLocalBtn">丢弃</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="cancelSettingsBtn">取消</button>
         <button type="button" class="btn btn-primary" id="saveSettingsBtn">保存设置</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Admin Token -->
+  <div class="modal-overlay" id="authModalOverlay" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+    <div class="modal-card" id="authModalCard">
+      <div class="modal-drag-handle" aria-hidden="true"></div>
+      <div class="modal-header">
+        <h2 class="modal-title" id="authModalTitle">管理口令</h2>
+        <button class="modal-close-btn" id="closeAuthModalBtn">&times;</button>
+      </div>
+      <form id="authForm" class="modal-form">
+        <div class="form-group">
+          <label for="authTokenInput" class="form-label">修改会写入服务器，请输入服务端配置的 ADMIN_TOKEN</label>
+          <input type="password" id="authTokenInput" class="form-input font-mono" autocomplete="current-password" required />
+          <p class="form-error" id="authError" role="alert"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="cancelAuthBtn">取消</button>
+          <button type="submit" class="btn btn-primary">确认</button>
+        </div>
+      </form>
     </div>
   </div>
 

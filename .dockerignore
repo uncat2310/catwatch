@@ -5,6 +5,7 @@ dist
 .env
 .env.*
 config/projects.json
+data
 projects.json
 *.pem
 *.key

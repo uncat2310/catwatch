@@ -1374,6 +1374,87 @@ body::before {
   to { transform: translateY(0); }
 }
 
+/* Uptime strip (24h) */
+.uptime-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.uptime-bars {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 14px;
+}
+
+.uptime-bar {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--bg-tag);
+  transition: transform var(--transition-fast);
+}
+
+.uptime-bar.up { background: var(--color-online); opacity: 0.72; }
+.uptime-bar.partial { background: var(--color-checking); }
+.uptime-bar.down { background: var(--color-offline); }
+
+.uptime-bar:hover {
+  transform: scaleY(1.25);
+  opacity: 1;
+}
+
+.uptime-pct {
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Settings: server sync */
+.admin-status-text,
+.migrate-text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-migrate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+}
+
+.form-error {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-offline);
+}
+
+[hidden] {
+  display: none !important;
+}
+
 /* Focus-visible */
 :focus-visible {
   outline: 2px solid var(--border-focus);
