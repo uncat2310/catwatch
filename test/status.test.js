@@ -21,3 +21,19 @@ test('status body escapes titles and renders one row per service', () => {
   assert.match(html, /1 个服务离线/);
   assert.match(renderStatusBody({ services: [] }), /status-empty/);
 });
+
+test('status events render recovery duration and relative time', () => {
+  const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+  const html = renderStatusBody({
+    now,
+    services: [{ title: 'Blog', state: 'up', uptime24h: 1, bars: [] }],
+    events: [
+      { title: 'Blog', type: 'up', at: now - 5 * 60000, durationMs: 65000 },
+      { title: 'Blog', type: 'down', at: now - 2 * 3600000, durationMs: null }
+    ]
+  });
+  assert.match(html, /中断 1 分 5 秒/);
+  assert.match(html, /5 分钟前/);
+  assert.match(html, /2 小时前/);
+  assert.match(renderStatusBody({ now, services: [{ title: 'A', state: 'up', bars: null }], events: [] }), /近 7 天没有状态变化/);
+});

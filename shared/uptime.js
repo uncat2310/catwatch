@@ -19,8 +19,8 @@ function barClass(u) {
   return 'partial';
 }
 
-/** 生成可用率条内部 HTML；summary 为空时渲染占位 */
-export function renderUptimeInner(summary, formatTime = () => '') {
+/** 只渲染 48 段柱条；summary 为空时渲染占位 */
+export function renderUptimeBars(summary, formatTime = () => '') {
   const bars = summary?.bars || Array.from({ length: UPTIME_SLOTS }, () => ({ t: 0, u: null, l: null }));
   const barsHtml = bars
     .map((bar) => {
@@ -34,13 +34,17 @@ export function renderUptimeInner(summary, formatTime = () => '') {
       return `<i class="uptime-bar ${barClass(bar.u)}"${label ? ` title="${escapeAttribute(label)}"` : ''}></i>`;
     })
     .join('');
+  return `<div class="uptime-bars">${barsHtml}</div>`;
+}
 
+/** 柱条 + 百分比 */
+export function renderUptimeInner(summary, formatTime = () => '') {
   const pct = formatUptime(summary?.uptime24h);
   const metaTitle = summary
     ? `近 24 小时可用率 ${pct} · 近 7 天 ${formatUptime(summary.uptime7d)}${summary.avgLatency24h != null ? ` · 平均 ${summary.avgLatency24h} ms` : ''}`
     : '近 24 小时可用率';
 
-  return `<div class="uptime-bars">${barsHtml}</div><span class="uptime-pct" title="${escapeAttribute(metaTitle)}">${escapeHtml(pct)}</span>`;
+  return `${renderUptimeBars(summary, formatTime)}<span class="uptime-pct" title="${escapeAttribute(metaTitle)}">${escapeHtml(pct)}</span>`;
 }
 
 export function renderUptimeStrip(projectId, summary, formatTime) {

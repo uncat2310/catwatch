@@ -1305,40 +1305,69 @@ a {
    Public status page
    ========================================================================== */
 .status-container {
-  max-width: 780px;
+  max-width: 760px;
 }
 
 .status-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.status-overall {
+.status-hero {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 0;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 0;
   border-top: 1.5px solid var(--line-strong);
   border-bottom: 1px solid var(--line);
-  font-size: 1.2rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+}
+
+.status-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
 }
 
 .status-overall-dot {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
+  flex-shrink: 0;
   background: var(--ink-3);
 }
 
-.status-overall.ok .status-overall-dot {
+.status-hero.ok .status-overall-dot {
   background: var(--alive);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--alive) 16%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--alive) 16%, transparent);
 }
 
-.status-overall.degraded .status-overall-dot {
+.status-hero.degraded .status-overall-dot {
   background: var(--dead);
   animation: signalPulse 2s var(--ease) infinite;
+}
+
+.status-overall-text {
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.status-hero-sub {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.status-hero-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .status-list {
@@ -1348,30 +1377,123 @@ a {
 }
 
 .status-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 340px) 70px;
-  align-items: center;
-  gap: 24px;
-  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 0 18px;
   border-bottom: 1px solid var(--line);
 }
 
+.status-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .status-row-name {
+  font-size: 1rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.status-row > .card-status-badge {
-  justify-self: end;
+.status-row .uptime-bars {
+  flex: none;
+  height: 30px;
+  gap: 3px;
+}
+
+.status-row .uptime-bar {
+  border-radius: 2px;
+}
+
+.status-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+
+.status-axis-pct {
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+}
+
+.status-events {
+  padding-top: 32px;
+}
+
+.status-section-title {
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+
+.status-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.status-event {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+
+.status-event-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--alive);
+}
+
+.status-event.is-down .status-event-dot {
+  background: var(--dead);
+}
+
+.status-event-text {
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.status-event-text strong {
+  color: var(--ink);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.status-event-detail {
+  margin-left: 10px;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.status-event-time {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.status-empty,
+.status-events-empty {
+  padding: 24px 0;
+  font-size: 0.86rem;
+  color: var(--ink-3);
 }
 
 .status-empty {
-  padding: 40px 0;
+  padding: 48px 0;
   text-align: center;
-  font-size: 0.88rem;
-  color: var(--ink-3);
 }
 
 /* ==========================================================================
@@ -1469,14 +1591,25 @@ a {
     grid-column: 2;
   }
 
-  .status-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: 10px;
+  .status-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
   }
 
-  .status-row > .uptime-strip {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .status-hero-metric {
+    align-items: flex-start;
+    padding-left: 30px;
+  }
+
+  .status-row .uptime-bars {
+    height: 26px;
+    gap: 2px;
+  }
+
+  .status-event-detail {
+    display: block;
+    margin-left: 0;
   }
 
   .modal-overlay {

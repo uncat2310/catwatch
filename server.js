@@ -498,28 +498,44 @@ function buildHistoryPayload() {
  */
 function buildStatusPayload() {
   const now = Date.now();
-  const services = loadServerProjects()
-    .filter((p) => p.statusPublic === true && p.pingEnabled !== false && p.customWanUrl)
-    .map((p) => {
-      const summary = historyStore.summary(p.id, now);
-      let state = 'unknown';
-      if (summary) {
-        // 历史状态经过连续失败防抖；尚未确认时显示「检测中」
-        state = summary.state || 'unknown';
-      } else {
-        const cached = HEALTH_CACHE.get(p.id);
-        if (cached?.alive) state = 'up';
-      }
-      return {
-        title: p.title || '未命名服务',
-        state,
-        uptime24h: summary?.uptime24h ?? null,
-        uptime7d: summary?.uptime7d ?? null,
-        avgLatency24h: summary?.avgLatency24h ?? null,
-        bars: summary?.bars || null
-      };
-    });
-  return { now, services };
+  const publicProjects = loadServerProjects().filter(
+    (p) => p.statusPublic === true && p.pingEnabled !== false && p.customWanUrl
+  );
+  const titleById = new Map(publicProjects.map((p) => [p.id, p.title || '未命名服务']));
+
+  const services = publicProjects.map((p) => {
+    const summary = historyStore.summary(p.id, now);
+    let state = 'unknown';
+    if (summary) {
+      // 历史状态经过连续失败防抖；尚未确认时显示「检测中」
+      state = summary.state || 'unknown';
+    } else {
+      const cached = HEALTH_CACHE.get(p.id);
+      if (cached?.alive) state = 'up';
+    }
+    return {
+      title: titleById.get(p.id),
+      state,
+      uptime24h: summary?.uptime24h ?? null,
+      uptime7d: summary?.uptime7d ?? null,
+      avgLatency24h: summary?.avgLatency24h ?? null,
+      bars: summary?.bars || null
+    };
+  });
+
+  // 只保留公开服务的事件，并去掉 URL / 错误码 / 内部 ID
+  const events = historyStore
+    .recentEvents(100)
+    .filter((e) => titleById.has(e.id))
+    .slice(0, 8)
+    .map((e) => ({
+      title: titleById.get(e.id),
+      type: e.type,
+      at: e.at,
+      durationMs: typeof e.durationMs === 'number' ? e.durationMs : null
+    }));
+
+  return { now, services, events };
 }
 
 function renderStatusSSR(htmlTemplate) {
