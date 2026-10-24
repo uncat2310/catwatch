@@ -53,7 +53,7 @@ function renderEvent(event, now) {
   return `
     <li class="status-event ${down ? 'is-down' : 'is-up'}">
       <span class="status-event-dot"></span>
-      <span class="status-event-text"><strong>${escapeHtml(event.title)}</strong> ${down ? '离线' : '恢复'}${detail ? `<span class="status-event-detail">${escapeHtml(detail)}</span>` : ''}</span>
+      <span class="status-event-text"><strong>${escapeHtml(event.title)}</strong> ${down ? '已离线' : '已恢复'}${detail ? `<span class="status-event-detail">${escapeHtml(detail)}</span>` : ''}</span>
       <time class="status-event-time">${escapeHtml(formatRelative(event.at, now))}</time>
     </li>`;
 }

@@ -1003,12 +1003,23 @@ a {
   background: color-mix(in srgb, var(--dead) 10%, transparent);
 }
 
-/* 触屏没有悬停：操作常驻在卡片右下 */
+/* 触屏没有悬停：操作常驻，和可用率条放在同一行，避免卡片多出一整行 */
 @media (hover: none) {
+  .project-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 14px;
+  }
+
+  .card-head {
+    grid-column: 1 / -1;
+  }
+
   .card-manage-actions {
     position: static;
-    align-self: flex-end;
-    margin: -8px -6px -6px 0;
+    margin: 0 -6px 0 0;
     padding: 0;
     background: transparent;
     box-shadow: none;
@@ -1112,13 +1123,35 @@ a {
 }
 
 .footer-link {
-  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
   text-decoration: none;
-  transition: color var(--fast) var(--ease);
+  transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 
 .footer-link:hover {
   color: var(--ink);
+  background: var(--hover);
+  border-color: color-mix(in srgb, var(--ink) 18%, var(--line));
+}
+
+.footer-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* 窄屏：版权单独一行，两个链接并排 */
+@media (max-width: 520px) {
+  .footer-copy {
+    flex-basis: 100%;
+    margin-right: 0;
+  }
 }
 
 /* ==========================================================================

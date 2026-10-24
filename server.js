@@ -237,9 +237,12 @@ async function mapPool(items, concurrency, worker) {
 
 function getClientIp(req) {
   if (TRUST_PROXY) {
+    // 取最右一项：它由最近的可信代理追加；最左项可被客户端伪造，用来绕过限流
     const forwarded = String(req.headers['x-forwarded-for'] || '')
-      .split(',')[0]
-      .trim();
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .pop();
     if (forwarded) return forwarded;
   }
   return req.socket?.remoteAddress || 'unknown';
@@ -305,8 +308,9 @@ async function probeHttpEndpoint(targetUrl, options = {}) {
   }
 
   await acquireGlobalProbeSlot();
+  let result;
   try {
-    return await new Promise((resolve) => {
+    result = await new Promise((resolve) => {
       let settled = false;
       const finish = (result) => {
         if (settled) return;
@@ -365,11 +369,7 @@ async function probeHttpEndpoint(targetUrl, options = {}) {
                 redirectTrusted = false;
               }
             }
-            probeHttpEndpoint(nextUrl, {
-              timeoutMs,
-              redirectCount: redirectCount + 1,
-              trusted: redirectTrusted
-            }).then(finish);
+            finish({ redirect: { url: nextUrl, trusted: redirectTrusted } });
             return;
           }
 
@@ -413,6 +413,16 @@ async function probeHttpEndpoint(targetUrl, options = {}) {
   } finally {
     releaseGlobalProbeSlot();
   }
+
+  // 先释放并发槽再跟随跳转：持有槽位递归时，并发打满后所有探测会互相等待而永久卡住
+  if (result.redirect) {
+    return probeHttpEndpoint(result.redirect.url, {
+      timeoutMs,
+      redirectCount: redirectCount + 1,
+      trusted: result.redirect.trusted
+    });
+  }
+  return result;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -602,9 +612,9 @@ function renderStatusSSR(htmlTemplate) {
     .replace(/<main class="status-main" id="statusRoot">\s*<\/main>/, `<main class="status-main" id="statusRoot">${body}</main>`);
 }
 
-async function sendHtml(req, res, html) {
+async function sendHtml(req, res, html, cacheControl = 'public, max-age=0, must-revalidate') {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  res.setHeader('Cache-Control', cacheControl);
   const acceptEncoding = req.headers['accept-encoding'] || '';
   if (acceptEncoding.includes('gzip')) {
     try {
@@ -1182,7 +1192,8 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      await sendHtml(req, res, renderPageSSR(indexEntry.text));
+      // 主页内嵌了服务地址：禁止 CDN 等共享缓存保存
+      await sendHtml(req, res, renderPageSSR(indexEntry.text), 'private, no-cache');
       return;
     }
 
