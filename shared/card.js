@@ -139,7 +139,7 @@ export function formatMetrics(m) {
     total: String(m.pingable ?? m.total),
     uptime: formatUptime(m.uptime),
     latency: m.latency == null ? '—' : String(Math.round(m.latency)),
-    eventTitle: m.event ? `${m.event.title} ${m.event.type === 'down' ? '离线' : '恢复'}` : '一切平稳',
+    eventTitle: m.event ? `${m.event.title} ${m.event.type === 'down' ? '已离线' : '已恢复'}` : '一切平稳',
     eventTime: m.event ? formatRelative(m.event.at, m.now) : '近 7 天没有状态变化',
     eventType: m.event ? m.event.type : 'none'
   };
