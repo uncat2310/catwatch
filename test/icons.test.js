@@ -120,3 +120,32 @@ test('fetchLimited blocks private targets unless trusted', async () => {
     server.close();
   }
 });
+
+test('IconStore only tries the best few declared icons before /favicon.ico', async () => {
+  const links = Array.from({ length: 8 }, (_, i) => `<link rel="icon" sizes="${100 - i}x${100 - i}" href="/i${i}.png">`).join('');
+  const requested = [];
+  const routes = {
+    '/': { body: `<html><head>${links}</head></html>` },
+    '/i7.png': { body: PNG },
+    '/favicon.ico': { body: ICO }
+  };
+  const server = await new Promise((resolve) => {
+    const s = http.createServer((req, res) => {
+      requested.push(req.url);
+      const route = routes[req.url];
+      res.writeHead(route ? 200 : 404);
+      res.end(route?.body);
+    });
+    s.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'icons-'));
+  try {
+    const store = new IconStore({ dir, fetcher: fetchLimited });
+    const icon = await store.get({ id: 'x', customWanUrl: `http://127.0.0.1:${server.address().port}/` });
+    assert.equal(icon.contentType, 'image/x-icon', 'the 8th link is never tried');
+    assert.equal(requested.filter((u) => /^\/i\d\.png$/.test(u)).length, 5);
+  } finally {
+    server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -106,9 +106,11 @@ function loadServerProjects() {
         return projectsCache.projects;
       }
       const content = fs.readFileSync(CONFIG_PATH, 'utf-8');
-      const data = JSON.parse(content);
+      const parsed = JSON.parse(content);
       // 管理员通过页面清空列表时文件为 []，同样视为有效配置
-      if (Array.isArray(data)) {
+      if (Array.isArray(parsed)) {
+        // 手写配置可能省略 pingEnabled：统一成布尔值，前后端按同一规则判断
+        const data = parsed.map((p) => (p && typeof p === 'object' ? { ...p, pingEnabled: p.pingEnabled !== false } : p));
         const trustedById = new Map();
         for (const project of data) {
           if (project?.id && typeof project.id === 'string') {
@@ -533,7 +535,15 @@ function buildHistoryPayload() {
     const summary = historyStore.summary(project.id, now);
     if (summary) services[project.id] = summary;
   }
-  return { now, services, events: historyStore.recentEvents(20) };
+  // 事件只返回前端需要的字段，不带 URL 和错误码
+  const events = historyStore.recentEvents(20).map((e) => ({
+    id: e.id,
+    title: e.title,
+    type: e.type,
+    at: e.at,
+    durationMs: typeof e.durationMs === 'number' ? e.durationMs : null
+  }));
+  return { now, services, events };
 }
 
 /**
