@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <title>服务状态 · 薛定谔的项目</title>
+  <meta name="description" content="薛定谔的项目 · 公开服务状态" />
+  <meta name="theme-color" content="#f5f3ef" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <script>
+    (function () {
+      try {
+        var theme = new URLSearchParams(location.search).get('theme');
+        if (theme !== 'light' && theme !== 'dark' && theme !== 'auto') {
+          var raw = localStorage.getItem('SCHRODINGER_PORTAL');
+          var parsed = raw && JSON.parse(raw);
+          theme = parsed && parsed.settings && parsed.settings.theme;
+        }
+        if (theme !== 'light' && theme !== 'dark' && theme !== 'auto') theme = 'auto';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'auto');
+      }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div class="ambient-glow ambient-glow-top" aria-hidden="true"></div>
+
+  <div class="app-container status-container">
+    <header class="status-header">
+      <div class="brand-eyebrow">SCHRÖDINGER'S PORTAL</div>
+      <h1 class="brand-title">服务状态</h1>
+    </header>
+
+    <main class="status-main" id="statusRoot"></main>
+
+    <footer class="app-footer">
+      <div class="footer-content">
+        <span>近 24 小时 · 每格 30 分钟</span>
+        <span class="footer-dot">·</span>
+        <span id="statusUpdated">每分钟自动刷新</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/status.js"></script>
+</body>
+</html>

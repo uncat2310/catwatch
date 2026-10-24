@@ -40,6 +40,7 @@
 - 💓 **服务端后台健康探针**：可信项目由服务端 daemon 探测；浏览器主要读取缓存；自定义项目才主动探测。
 - 📊 **24h 可用率条**：每张卡片显示近 24 小时（48 段 × 30 分钟）的可用情况与在线率，悬停查看延迟；历史保留 7 天并落盘。
 - 🔔 **掉线 / 恢复通知**：连续 3 次探测失败才判定离线（防抖），支持 Telegram、Bark、Server酱、通用 Webhook。
+- 🌐 **公开状态页 `/status`**：只展示你勾选公开的服务，只有名称、状态和 24h 可用率，不暴露任何链接或域名，适合分享给朋友。
 - ☁️ **服务器同步编辑**：设置 `ADMIN_TOKEN` 后，页面上的增删改直接写回 `config/projects.json`，所有设备一致；未设置时保持浏览器本地编辑。
 - 🖼️ **自动 Favicon 识别**：自建服务优先同源路径；公开站点域名 fallback；失败回退本地图标。
 - 🐳 **Docker / Compose / Node / PM2** 多种部署方式。
@@ -205,6 +206,34 @@ docker run -d \
 
 ---
 
+## 🌐 公开状态页
+
+访问 `https://你的域名/status` 即可看到一个只读的状态页：
+
+- 只显示勾选了「在公开状态页显示」的服务（编辑服务弹窗中设置，需服务器模式；也可以在 `config/projects.json` 中写 `"statusPublic": true`）
+- 只包含服务名称、当前状态、24h 可用率条和百分比，**不包含 URL、hostname、内部 ID**
+- 数据接口为 `GET /api/status`，同样只返回公开服务
+- 页面每分钟自动刷新，服务端预渲染，禁用 JS 也能看
+
+如果你的主页本身放在密码后面，可以只放行状态页相关路径，例如 Caddy：
+
+```caddy
+portal.example.com {
+    @public path /status /api/status /assets/* /favicon.svg
+    handle @public {
+        reverse_proxy 127.0.0.1:3000
+    }
+    handle {
+        basic_auth {
+            admin <caddy hash-password 生成的哈希>
+        }
+        reverse_proxy 127.0.0.1:3000
+    }
+}
+```
+
+---
+
 ## 🔔 状态通知
 
 服务端每 12 秒探测一次 `config/projects.json` 中启用探针的服务：
@@ -319,7 +348,8 @@ schrodinger-portal/
 │   ├── services/pingService.js  # 前端探针客户端
 │   ├── app.js                   # 前端交互与状态
 │   └── style.css                # Vanilla CSS
-├── index.html
+├── index.html                   # 主页
+├── status.html                  # 公开状态页
 ├── server.js                    # 生产静态服务 + SSR + 探针 API
 ├── Dockerfile
 ├── docker-compose.yml

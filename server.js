@@ -12,6 +12,7 @@ import { getProjectNativeFavicon } from './shared/favicon.js';
 import { parseHttpUrl } from './shared/url.js';
 import { validateProbeTarget, createPinnedLookup } from './shared/ssrf.js';
 import { renderUptimeStrip } from './shared/uptime.js';
+import { renderStatusBody } from './shared/statusPage.js';
 import { HistoryStore } from './lib/history.js';
 import { createNotifier } from './lib/notify.js';
 import { sanitizeProjects, writeJsonAtomic, tokenMatches, readBearerToken } from './lib/store.js';
@@ -22,6 +23,7 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 const DIST_DIR = path.join(__dirname, 'dist');
 const INDEX_FILE = path.join(DIST_DIR, 'index.html');
+const STATUS_FILE = path.join(DIST_DIR, 'status.html');
 const CORS_ORIGIN = (process.env.CORS_ORIGIN || '').trim();
 const ALLOW_INSECURE_TLS = String(process.env.ALLOW_INSECURE_TLS || 'false').toLowerCase() === 'true';
 const TRUST_PROXY = String(process.env.TRUST_PROXY || 'false').toLowerCase() === 'true';
@@ -490,6 +492,65 @@ function buildHistoryPayload() {
   return { now, services, events: historyStore.recentEvents(20) };
 }
 
+/**
+ * 公开状态页数据：只包含勾选了 statusPublic 的服务，且不带 URL / hostname
+ */
+function buildStatusPayload() {
+  const now = Date.now();
+  const services = loadServerProjects()
+    .filter((p) => p.statusPublic === true && p.pingEnabled !== false && p.customWanUrl)
+    .map((p) => {
+      const summary = historyStore.summary(p.id, now);
+      let state = 'unknown';
+      if (summary) {
+        // 历史状态经过连续失败防抖；尚未确认时显示「检测中」
+        state = summary.state || 'unknown';
+      } else {
+        const cached = HEALTH_CACHE.get(p.id);
+        if (cached?.alive) state = 'up';
+      }
+      return {
+        title: p.title || '未命名服务',
+        state,
+        uptime24h: summary?.uptime24h ?? null,
+        uptime7d: summary?.uptime7d ?? null,
+        avgLatency24h: summary?.avgLatency24h ?? null,
+        bars: summary?.bars || null
+      };
+    });
+  return { now, services };
+}
+
+function renderStatusSSR(htmlTemplate) {
+  const payload = buildStatusPayload();
+  const body =
+    renderStatusBody(payload) +
+    `<script id="status-data" type="application/json">${safeJsonForHtmlScript(payload)}</script>`;
+  return htmlTemplate
+    .replace(/\r\n/g, '\n')
+    .replace(/<main class="status-main" id="statusRoot">\s*<\/main>/, `<main class="status-main" id="statusRoot">${body}</main>`);
+}
+
+async function sendHtml(req, res, html) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  if (acceptEncoding.includes('gzip')) {
+    try {
+      const gzipped = await new Promise((resolve, reject) => {
+        zlib.gzip(Buffer.from(html, 'utf-8'), (err, buf) => (err ? reject(err) : resolve(buf)));
+      });
+      res.writeHead(200, { 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' });
+      res.end(gzipped);
+      return;
+    } catch {
+      // 回退到未压缩
+    }
+  }
+  res.writeHead(200);
+  res.end(html);
+}
+
 function isAdminRequest(req) {
   return Boolean(ADMIN_TOKEN) && tokenMatches(ADMIN_TOKEN, readBearerToken(req));
 }
@@ -869,6 +930,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // 公开状态页数据（仅 statusPublic 服务，无 URL）
+    if (pathname === '/api/status' && req.method === 'GET') {
+      sendJson(res, 200, buildStatusPayload());
+      return;
+    }
+
+    if ((pathname === '/status' || pathname === '/status.html') && req.method === 'GET') {
+      const statusEntry = getCachedFile(STATUS_FILE);
+      if (!statusEntry) {
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Missing status.html');
+        return;
+      }
+      await sendHtml(req, res, renderStatusSSR(statusEntry.text));
+      return;
+    }
+
     // 校验管理口令（前端登录用）
     if (pathname === '/api/auth' && req.method === 'POST') {
       if (!ADMIN_TOKEN) {
@@ -1076,29 +1154,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const ssrHtml = renderPageSSR(indexEntry.text);
-      const acceptEncoding = req.headers['accept-encoding'] || '';
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
-
-      if (acceptEncoding.includes('gzip')) {
-        try {
-          const gzipped = await new Promise((resolve, reject) => {
-            zlib.gzip(Buffer.from(ssrHtml, 'utf-8'), (err, buf) => (err ? reject(err) : resolve(buf)));
-          });
-          res.writeHead(200, {
-            'Content-Encoding': 'gzip',
-            Vary: 'Accept-Encoding'
-          });
-          res.end(gzipped);
-        } catch {
-          res.writeHead(200);
-          res.end(ssrHtml);
-        }
-      } else {
-        res.writeHead(200);
-        res.end(ssrHtml);
-      }
+      await sendHtml(req, res, renderPageSSR(indexEntry.text));
       return;
     }
 
