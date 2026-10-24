@@ -2,7 +2,7 @@
 
 # 🐱 薛定谔的项目 (Schrödinger's Portal)
 
-**Editorial / Gallery 气质的轻量自托管服务导航与健康状态 Portal**
+**温暖的自托管导航页，顺便替你盯着每一个服务**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)](https://nodejs.org)
@@ -12,56 +12,79 @@
 
 <br/>
 
-### Light Mode
+![浅色模式](docs/screenshots/light.webp)
 
-![Light Mode](docs/screenshots/light.png)
+<details>
+<summary><b>深色模式 · 公开状态页 · 手机</b></summary>
+<br/>
 
-### Dark Mode
+![深色模式](docs/screenshots/dark.webp)
 
-![Dark Mode](docs/screenshots/dark.png)
+<table>
+  <tr>
+    <td width="62%"><img src="docs/screenshots/status.webp" alt="公开状态页" /></td>
+    <td width="38%"><img src="docs/screenshots/mobile.webp" alt="手机" /></td>
+  </tr>
+</table>
+
+</details>
 
 </div>
 
 ---
 
-## 📖 项目简介
+## 📖 简介
 
-**薛定谔的项目 (Schrödinger's Portal)** 是一个基于 **Vite + Vanilla JavaScript + Node.js** 的轻量个人服务器导航面板：用 Apple 风格卡片聚合常用服务，服务端持续探测并记录可用率，掉线和恢复时推送通知。
+薛定谔的猫在打开盒子之前，谁也不知道它是死是活——你的自建服务也一样。
 
-一句话：**好看的导航页 + 轻量版状态监控，一个容器搞定**。无数据库、无前端框架依赖。
+**薛定谔的项目**是一个轻量的个人服务器导航页：把常用服务聚合成一页，同时由服务端持续探测、记录 24 小时可用率，服务掉线或恢复时推送通知，还可以生成一个只读的公开状态页分享给朋友。
+
+- **一个容器搞定**：Node.js + Vite + 原生 JavaScript，无数据库、无前端框架
+- **数据都是文件**：服务列表是 `config/projects.json`，历史和图标缓存在 `data/` 目录
+- **暖纸色界面**：奶油纸色 / 暖炭灰深色，衬线标题，手机上同样好用
 
 ---
 
-## ✨ 核心特性
+## ✨ 功能一览
 
-- 🗞️ **Editorial / Gallery 视觉**：暖纸色 Light、博物馆夜间 Dark，克制的环境色与材质感。
-- 🧩 **Node.js 首屏预渲染**：服务端注入项目卡片，降低首屏空白。
-- 🔍 **Spotlight 搜索**：`Ctrl + K` / `⌘ K`，键盘导航与回车直达。
-- 💓 **服务端后台健康探针**：可信项目由服务端 daemon 探测；浏览器主要读取缓存；自定义项目才主动探测。
-- 📊 **24h 可用率条**：每张卡片显示近 24 小时（48 段 × 30 分钟）的可用情况与在线率，悬停查看延迟；历史保留 7 天并落盘。
-- 🔔 **掉线 / 恢复通知**：连续 3 次探测失败才判定离线（防抖），支持 Telegram、Bark、Server酱、通用 Webhook。
-- 🌐 **公开状态页 `/status`**：只展示你勾选公开的服务，只有名称、状态和 24h 可用率，不暴露任何链接或域名，适合分享给朋友。
-- ☁️ **服务器同步编辑**：设置 `ADMIN_TOKEN` 后，页面上的增删改直接写回 `config/projects.json`，所有设备一致；未设置时保持浏览器本地编辑。
-- 🖼️ **服务图标自动获取**：服务端读取服务页面声明的图标并缓存，同源加载；可手动指定；拿不到时显示首字母头像。
-- 🐳 **Docker / Compose / Node / PM2** 多种部署方式。
+| | |
+| :--- | :--- |
+| 🧭 **导航** | 服务卡片自动获取图标；`Ctrl + K` / `⌘ K` 搜索、键盘直达；首屏由服务端预渲染 |
+| 📊 **监控** | 后台每 12 秒探测一次；每个服务显示 24 小时可用率条（48 段 × 30 分钟）和延迟；概览卡片汇总在线数、整体可用率、延迟走势和最近事件；历史保留 7 天 |
+| 🔔 **通知** | 连续 3 次失败才判定离线，恢复时附中断时长；支持 Telegram、Bark、Server酱、通用 Webhook |
+| 🌐 **公开状态页** | `/status` 只展示你勾选公开的服务：名称、状态、可用率和事件，不暴露任何地址 |
+| ☁️ **多设备同步** | 设置 `ADMIN_TOKEN` 后，页面上的增删改直接写回服务器，所有设备看到同一份列表 |
+| 🖼️ **图标** | 服务端读取服务页面声明的图标并缓存，同源加载；也可以手动指定；拿不到时显示首字母头像 |
 
 ---
 
 ## 🚀 快速开始
 
-### 方式一：Docker 一键拉取（推荐）
+### Docker（推荐）
 
 ```bash
+mkdir -p schrodinger-portal/config schrodinger-portal/data && cd schrodinger-portal
+sudo chown -R 1000:1000 config data     # 容器内以 node 用户 (uid 1000) 运行，需要写权限
+
 docker run -d \
   --name schrodinger-portal \
   --restart unless-stopped \
   -p 3000:3000 \
+  -e ADMIN_TOKEN="换成一串足够长的随机字符串" \
+  -v "$PWD/config:/app/config" \
+  -v "$PWD/data:/app/data" \
   ghcr.io/uncat2310/schrodinger-portal:latest
 ```
 
-访问 `http://你的服务器IP:3000`。
+然后：
 
-### 方式二：Docker Compose
+1. 打开 `http://你的服务器IP:3000`
+2. 点右上角「添加」，第一次保存时输入上面的 `ADMIN_TOKEN`
+3. 服务会写进 `config/projects.json`，几秒后出现图标和在线状态
+
+> 随机口令可以用 `openssl rand -hex 24` 生成。不设置 `ADMIN_TOKEN` 也能用，但页面上的修改只会保存在当前浏览器（见[两种编辑模式](#-两种编辑模式)）。
+
+### Docker Compose
 
 ```bash
 git clone https://github.com/uncat2310/schrodinger-portal.git
@@ -69,32 +92,32 @@ cd schrodinger-portal
 docker compose up -d
 ```
 
-说明：`docker-compose.yml` 同时声明了 `image` 与 `build`。正式部署会优先使用 GHCR 镜像；本地也可 `docker compose build` 自行构建。
+`docker-compose.yml` 里的 `ADMIN_TOKEN`、通知变量和 `volumes` 默认是注释掉的，按需取消注释即可。文件同时声明了 `image` 与 `build`：默认拉取 GHCR 镜像，也可以 `docker compose build` 自己构建。
 
-### 方式三：Node.js
+### Node.js
 
-要求：Node.js 18+。
+要求 Node.js 18+。
 
 ```bash
 npm ci
 npm run build
-npm start
+ADMIN_TOKEN="你的口令" npm start
 ```
 
-可选 PM2：
+<details>
+<summary>用 PM2 或 systemd 常驻</summary>
+
+PM2：
 
 ```bash
 npm install -g pm2
-pm2 start server.js --name "schrodinger-portal"
+ADMIN_TOKEN="你的口令" pm2 start server.js --name "schrodinger-portal"
 pm2 save
 ```
 
-可选 systemd（推荐生产）：
-
-> 生产环境建议使用**独立非 root 用户**运行 Node 服务。
+systemd（生产环境建议用独立的非 root 用户运行）：
 
 ```bash
-# 创建专用用户与目录权限
 sudo useradd --system --home /srv/schrodinger-portal --shell /usr/sbin/nologin schrodinger
 sudo chown -R schrodinger:schrodinger /srv/schrodinger-portal
 
@@ -113,109 +136,129 @@ Restart=always
 RestartSec=5
 Environment=PORT=3000
 Environment=NODE_ENV=production
+EnvironmentFile=-/etc/schrodinger-portal.env
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# 口令和通知变量放在单独的文件里，权限设为仅 root 可读
+echo 'ADMIN_TOKEN=你的口令' | sudo tee /etc/schrodinger-portal.env
+sudo chmod 600 /etc/schrodinger-portal.env
+
 systemctl daemon-reload
 systemctl enable --now schrodinger-portal.service
-```
-
-常用命令：
-
-```bash
-systemctl status schrodinger-portal
-systemctl restart schrodinger-portal
 journalctl -u schrodinger-portal -f
 ```
 
-反向代理只需指向 `127.0.0.1:3000`（与 unit 名称无关）。若你曾使用旧名 `aetherhub`，请改用 `schrodinger-portal`。
+</details>
 
 ---
 
 ## ⚙️ 配置
 
-### 服务端默认项目
+### 服务列表 `config/projects.json`
 
-优先读取：
+大多数情况下直接在页面上增删改即可；也可以手工编辑这个文件（保存后自动生效，无需重启）。示例见 [`config/projects.example.json`](config/projects.example.json)：
 
-```text
-config/projects.json
+```json
+[
+  {
+    "id": "p-blog",
+    "title": "个人博客",
+    "customWanUrl": "https://blog.example.com",
+    "pingEnabled": true,
+    "statusPublic": true
+  }
+]
 ```
 
-该文件已在 `.gitignore` / `.dockerignore` 中忽略，用于存放你自己的服务列表（可含内网地址）。公开仓库请使用示例文件：
+| 字段 | 必填 | 说明 |
+| :--- | :--- | :--- |
+| `id` | ✅ | 唯一标识，字母、数字、`-` `_` `.` `:` |
+| `title` | ✅ | 显示名称 |
+| `customWanUrl` | ✅ | 服务地址，`http://` 或 `https://`，可以是内网地址 |
+| `pingEnabled` | | 是否探测在线状态，默认 `true` |
+| `statusPublic` | | 是否出现在公开状态页，默认 `false` |
+| `iconUrl` | | 手动指定图标地址；留空则自动获取 |
 
-```bash
-mkdir -p config
-cp config/projects.example.json config/projects.json
-```
-
-示例仅包含 `github.com` / `vercel.com` / `cloudflare.com` 等公开站点。
-
-Docker 挂载示例（推荐挂载**目录**，这样页面编辑可以写回，探测历史也能在重启后保留）：
-
-```bash
-mkdir -p config data
-sudo chown -R 1000:1000 config data   # 容器内以 node 用户 (uid 1000) 运行
-
-docker run -d \
-  --name schrodinger-portal \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -e ADMIN_TOKEN="$(openssl rand -hex 24)" \
-  -v "$PWD/config:/app/config" \
-  -v "$PWD/data:/app/data" \
-  ghcr.io/uncat2310/schrodinger-portal:latest
-```
-
-只想手工维护配置、不在页面上编辑时，也可以只读挂载单个文件：`-v "$PWD/config/projects.json:/app/config/projects.json:ro"`。
+`config/projects.json` 已被 `.gitignore` / `.dockerignore` 忽略，可以放心写内网地址。文件不存在时显示内置的公开示例。
 
 ### 环境变量
 
 | 变量 | 默认 | 说明 |
 | :--- | :--- | :--- |
 | `PORT` | `3000` | 监听端口 |
-| `CORS_ORIGIN` | 空 | 默认同源，不返回 `Access-Control-Allow-Origin: *`；需要跨域时显式设置 |
-| `ALLOW_INSECURE_TLS` | `false` | 为 `true` 时探针才忽略 TLS 证书错误；默认严格校验 |
-| `TRUST_PROXY` | `false` | 仅当服务位于**可信反向代理**之后，且后端端口不对公网直接暴露时，才设为 `true` 以信任 `X-Forwarded-For`；默认不信任客户端伪造的转发头 |
-| `ADMIN_TOKEN` | 空 | 管理口令。设置后启用「服务器模式」：页面增删改写回 `config/projects.json`。请使用足够长的随机串 |
-| `DATA_DIR` | `./data` | 探测历史 `history.json` 的存放目录 |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 空 | Telegram 通知（两者都要填） |
+| `ADMIN_TOKEN` | 空 | 管理口令。设置后页面上的修改写回服务器；请使用足够长的随机字符串 |
+| `DATA_DIR` | `./data` | 探测历史 `history.json` 与图标缓存 `icons/` 的目录 |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | 空 | Telegram 通知，两者都要填 |
 | `BARK_URL` | 空 | Bark 通知，如 `https://api.day.app/<key>` |
 | `SERVERCHAN_SENDKEY` | 空 | Server酱 Turbo 通知 |
 | `NOTIFY_WEBHOOK_URL` | 空 | 通用 Webhook，POST JSON：`{ title, body, event }` |
+| `ALLOW_INSECURE_TLS` | `false` | 为 `true` 时探测和取图标忽略证书错误（自签证书的内网服务） |
+| `TRUST_PROXY` | `false` | 仅当服务位于**可信反向代理**之后、且后端端口不对公网暴露时才设为 `true`，用于信任 `X-Forwarded-For` |
+| `CORS_ORIGIN` | 空 | 默认只允许同源；需要跨域时显式设置 |
 
 ---
 
-## 💾 数据持久化说明
-
-服务列表有两种模式，取决于是否设置了 `ADMIN_TOKEN`：
+## ☁️ 两种编辑模式
 
 | | 服务器模式（设置了 `ADMIN_TOKEN`） | 本地模式（未设置） |
 | :--- | :--- | :--- |
-| 服务列表来源 | `config/projects.json` | `config/projects.json` 作为初始值，之后以浏览器 LocalStorage 为准 |
-| 页面上增删改 | 首次需输入管理口令，写回 `config/projects.json` | 只写入当前浏览器 |
+| 服务列表来源 | `config/projects.json` | `config/projects.json` 作为初始值，之后以浏览器为准 |
+| 页面上增删改 | 首次输入管理口令后，写回 `config/projects.json` | 只保存在当前浏览器 |
 | 多设备同步 | ✅ | ❌ |
-| 可用率历史 / 通知 | ✅ 全部服务 | 仅 `config/projects.json` 中的服务 |
+| 可用率历史 / 通知 / 公开状态页 | ✅ 全部服务 | 仅 `config/projects.json` 中的服务 |
 
-- 管理口令保存在当前浏览器，可在「设置 → 服务器同步」中退出。
-- 从本地模式切换到服务器模式后，若浏览器里还留有旧的本地列表，可在「设置 → 服务器同步」中一键上传或丢弃。
-- 主题、标题等个人偏好始终只保存在浏览器。
-- 探测历史保存在 `DATA_DIR/history.json`，每 5 分钟及进程退出时写盘。
+- 管理口令保存在当前浏览器，可在「设置 → 服务器同步」中退出
+- 从本地模式切换过来时，如果浏览器里还留着旧的本地列表，可以在「设置 → 服务器同步」里一键上传或丢弃
+- 主题、标题、副标题这些个人偏好始终只保存在浏览器
+
+---
+
+## 🔔 状态通知
+
+服务端每 12 秒探测一次启用了探针的服务：
+
+- **连续 3 次失败**（约 36 秒）才判定为离线并通知，单次抖动不会打扰你
+- 恢复后的第一次成功即发送恢复通知，附上中断时长
+- 状态写入历史文件，重启后不会重复通知同一次故障
+
+配置任意一个通知变量即可启用，多个可以同时使用。登录管理后，在「设置 → 服务器同步」里可以发送一条测试通知。
+
+<details>
+<summary>通用 Webhook 的请求格式</summary>
+
+```json
+{
+  "title": "🔴 相册 不可用",
+  "body": "https://gallery.example.com/\n原因：TIMEOUT",
+  "event": {
+    "id": "p-gallery",
+    "title": "相册",
+    "url": "https://gallery.example.com/",
+    "type": "down",
+    "at": 1792846872154,
+    "error": "TIMEOUT"
+  }
+}
+```
+
+恢复事件的 `type` 为 `up`，并带 `durationMs`（中断时长，毫秒）。
+
+</details>
 
 ---
 
 ## 🌐 公开状态页
 
-访问 `https://你的域名/status` 即可看到一个只读的状态页：
+访问 `https://你的域名/status` 即可看到只读的状态页：整体状态、24 小时整体可用率、每个服务的状态条，以及最近的掉线 / 恢复事件。
 
-- 只显示勾选了「在公开状态页显示」的服务（编辑服务弹窗中设置，需服务器模式；也可以在 `config/projects.json` 中写 `"statusPublic": true`）
-- 只包含服务名称、当前状态、24h 可用率条和百分比，**不包含 URL、hostname、内部 ID**
-- 数据接口为 `GET /api/status`，同样只返回公开服务
-- 页面每分钟自动刷新，服务端预渲染，禁用 JS 也能看
+- 只显示勾选了「在公开状态页显示」的服务（编辑弹窗中设置，或在 `projects.json` 中写 `"statusPublic": true`）
+- **不包含**任何服务地址、hostname、内部 ID 或错误码；图标通过不含 ID 的匿名地址加载
+- 服务端预渲染，禁用 JS 也能看，每分钟自动刷新
 
-如果你的主页本身放在密码后面，可以只放行状态页相关路径，例如 Caddy：
+如果主页本身放在密码后面，可以只放行状态页需要的路径。Caddy 示例：
 
 ```caddy
 portal.example.com {
@@ -234,80 +277,56 @@ portal.example.com {
 
 ---
 
-## 🔔 状态通知
-
-服务端每 12 秒探测一次 `config/projects.json` 中启用探针的服务：
-
-- **连续 3 次失败**（约 36 秒）才判定为不可用并通知，单次抖动不会打扰你
-- 恢复后第一次成功即发送恢复通知，并附上中断时长
-- 状态写入历史文件，重启后不会重复通知同一次故障
-
-配置任意通知渠道的环境变量即可启用；登录管理后可在「设置 → 服务器同步」中发送测试通知。
-
----
-
-## 💓 健康探针说明
-
-- 主路径：服务端根据可信项目 ID 或经过校验的 URL 发起 HTTP(S) 探测
-- 客户端任意 URL 探测会拒绝 localhost / 私网 / link-local / 云 metadata 等目标（防 SSRF）
-- HTTPS 默认启用证书校验
-- 状态文案：`在线` / `不可用` / `检测中`
-- 浏览器 `no-cors` fallback 只能说明请求可能发出，**不是高精度真实测速**
-
----
-
 ## 🖼️ 服务图标
 
-图标由**服务端**获取并缓存，浏览器统一从同源的 `/api/icon/<服务ID>` 加载：
+图标由**服务端**获取并缓存，浏览器统一从同源的 `/api/icon/<服务ID>` 加载，按以下顺序尝试：
 
-1. 编辑服务时填写的「图标地址」优先
-2. 否则读取服务首页 HTML 中声明的 `<link rel="icon">` / `apple-touch-icon`，优先 SVG 和高分辨率图标
-3. 再退回站点根目录的 `/favicon.ico`
-4. 都拿不到时显示首字母头像（颜色由服务名称决定）
+1. 编辑服务时填写的「图标地址」
+2. 服务首页 HTML 中声明的 `<link rel="icon">` / `apple-touch-icon`（SVG 和高分辨率优先）
+3. 站点根目录的 `/favicon.ico`
+4. 都拿不到时显示首字母头像，颜色由服务名称决定
 
-说明：
-
-- 只抓取 `config/projects.json` 中的服务；跨主机的图标地址按公网规则做 SSRF 校验；响应限制大小并按文件头确认确实是图片（登录页之类的 HTML 不会被当成图标）
+- 按文件头确认确实是图片，被重定向到登录页时返回的 HTML 不会被当成图标
 - 缓存在 `DATA_DIR/icons/`，24 小时刷新一次；源站暂时不可用时继续使用旧图标
-- 不经过任何第三方图标服务，也不会因为门户是 HTTPS 而被浏览器拦截 HTTP 服务的图标
-- 公开状态页使用不含服务 ID 的 `/api/status-icon/<随机键>`，只对已公开的服务返回图标
-- 仅保存在浏览器本地的服务（本地模式下自行添加的）由浏览器直接加载手动图标地址或站点 `/favicon.ico`
+- 不经过任何第三方图标服务；HTTPS 门户下的 HTTP 服务也能正常显示图标
+- 只保存在浏览器里的服务（本地模式下添加的）由浏览器直接加载手动图标地址或站点 `/favicon.ico`
 
 ---
 
-## 🔄 Docker 更新
+## 🔄 升级
 
 ```bash
 docker pull ghcr.io/uncat2310/schrodinger-portal:latest
-docker stop schrodinger-portal
-docker rm schrodinger-portal
-docker run -d \
-  --name schrodinger-portal \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  ghcr.io/uncat2310/schrodinger-portal:latest
+docker stop schrodinger-portal && docker rm schrodinger-portal
+# 再执行一遍「快速开始」里的 docker run（保持同样的 -e 和 -v 参数）
 ```
 
 Compose：
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose pull && docker compose up -d
 ```
+
+> **从旧版本升级**：旧版 README 推荐只读挂载单个 `projects.json`。这种挂载方式仍能运行，但页面上的保存会失败，历史和图标缓存也会在重启后丢失。请改为可写挂载 `config` 和 `data` 两个目录（见[快速开始](#docker推荐)），并把宿主目录属主改为 `1000:1000`。
 
 ---
 
-## 🌐 反向代理示例
+## 🔐 安全建议
 
-### Caddy
+- 对外提供服务时请走 **HTTPS** 反向代理：管理口令通过请求头发送，明文 HTTP 下可能被窃听
+- `ADMIN_TOKEN` 使用足够长的随机字符串（少于 12 个字符时启动日志会提示）；管理接口带限流
+- 不要把 `config/projects.json`、`.env`、口令和通知密钥提交到公开仓库
+- 探测和取图标允许访问你在 `projects.json` 里配置的内网地址；浏览器提交的任意地址则会拒绝 localhost / 私网 / 云 metadata 等目标（防 SSRF）
+- 服务返回的 SVG 图标带沙箱 CSP 输出，不能在本站执行脚本
+
+<details>
+<summary>反向代理示例（Caddy / Nginx）</summary>
 
 ```caddy
 portal.example.com {
     reverse_proxy 127.0.0.1:3000
 }
 ```
-
-### Nginx（可选）
 
 ```nginx
 server {
@@ -325,43 +344,52 @@ server {
 }
 ```
 
----
-
-## 🔐 安全建议
-
-- 建议通过 HTTPS 反向代理对外提供服务
-- 不要把私有 `config/projects.json`、token、密钥提交进公开仓库
-- 探针仅用于 HTTP/HTTPS 健康检查，不要把任意公网实例当作开放 SSRF 入口
-- 暴露在公网时请使用最新镜像 / 最新代码
+</details>
 
 ---
 
-## 🛠️ 项目结构
+## 🧩 API
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/info` | | 运行状态、是否启用管理 |
+| `GET` | `/api/ping-all` | | 各服务最近一次探测结果 |
+| `GET` | `/api/history` | | 各服务 24h / 7d 可用率、48 段历史、最近事件 |
+| `GET` | `/api/icon/:id` | | 服务图标 |
+| `GET` | `/api/status` | | 公开状态页数据（仅公开服务，不含地址） |
+| `GET` | `/api/status-icon/:key` | | 公开状态页图标 |
+| `POST` | `/api/auth` | 🔑 | 校验管理口令 |
+| `PUT` | `/api/projects` | 🔑 | 整体替换服务列表，body：`{ "projects": [...] }` |
+| `POST` | `/api/notify/test` | 🔑 | 发送测试通知 |
+
+🔑 = 需要请求头 `Authorization: Bearer <ADMIN_TOKEN>`。
+
+---
+
+## 🛠️ 开发
+
+```bash
+npm ci
+npm run dev      # Vite 开发服务器（无服务端预渲染与 API）
+npm run check    # 构建 + 单元测试
+npm run build && npm start   # 完整运行
+```
 
 ```text
 schrodinger-portal/
-├── public/                      # 静态资源
-│   ├── avatar.jpg               # 默认头像 / Apple Touch Icon
-│   ├── favicon.svg              # 浏览器 Favicon
-│   └── icons/                   # 可选本地图标
-├── config/
-│   └── projects.example.json    # 公开示例配置（复制为 projects.json）
-├── docs/screenshots/            # README 真实界面截图
-├── shared/                      # 前后端共用小工具（转义 / URL / 问候 / favicon / SSRF / 可用率条）
-├── lib/                         # 服务端模块：探测历史、通知、配置写入、图标抓取
+├── index.html / status.html     # 主页 / 公开状态页
+├── server.js                    # 静态服务 + 服务端预渲染 + API + 后台探测
+├── lib/                         # 服务端模块
+│   ├── history.js               #   探测历史与状态机
+│   ├── notify.js                #   通知通道
+│   ├── icons.js / fetch.js      #   图标获取与受限 HTTP 请求
+│   └── store.js                 #   配置校验、原子写入、口令比对
+├── shared/                      # 前后端共用：卡片 / 状态页模板、可用率条、转义、SSRF 校验等
+├── src/                         # 前端：app.js、status.js、style.css
 ├── test/                        # node:test 单元测试
-├── src/
-│   ├── data/defaultConfig.js    # 前端默认配置
-│   ├── services/pingService.js  # 前端探针客户端
-│   ├── app.js                   # 前端交互与状态
-│   └── style.css                # Vanilla CSS
-├── index.html                   # 主页
-├── status.html                  # 公开状态页
-├── server.js                    # 生产静态服务 + SSR + 探针 API
-├── Dockerfile
-├── docker-compose.yml
-├── .dockerignore
-└── README.md
+├── config/projects.example.json # 示例配置
+├── public/                      # 头像、favicon、内置图标
+└── docs/screenshots/            # README 截图
 ```
 
 ---
@@ -370,24 +398,16 @@ schrodinger-portal/
 
 | 快捷键 | 功能 |
 | :--- | :--- |
-| `Ctrl + K` / `Cmd + K` | 打开 Spotlight 搜索 |
-| `↑` / `↓` | 搜索结果导航 |
+| `Ctrl + K` / `⌘ K` | 打开搜索 |
+| `↑` / `↓` | 在搜索结果中移动 |
 | `Enter` | 打开所选服务 |
-| `ESC` | 关闭弹窗 |
+| `Esc` | 关闭弹窗 |
 
 ---
 
 ## 🤝 参与贡献
 
-欢迎提交 Issue 与 Pull Request。
-
-1. Fork 本仓库
-2. 创建分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交修改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
----
+欢迎提交 Issue 与 Pull Request。提交前请运行 `npm run check`。
 
 ## 📄 开源许可证
 
