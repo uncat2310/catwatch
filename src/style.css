@@ -1519,6 +1519,42 @@ a {
   max-width: 760px;
 }
 
+/* 主角是品牌名，页面用途只用一枚小标签说明 */
+.status-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.status-title-row .brand-title {
+  margin-top: 0;
+}
+
+.status-page-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.status-page-tag svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.status-header .brand-subtitle {
+  color: var(--ink-3);
+}
+
 .status-main {
   flex: 1;
   display: flex;
@@ -1539,7 +1575,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 26px 28px;
+  padding: 18px 24px;
 }
 
 .status-hero.degraded {
@@ -1549,7 +1585,7 @@ a {
 
 .status-hero .obs-value {
   font-family: var(--font-serif);
-  font-size: 2.2rem;
+  font-size: 1.6rem;
   font-weight: 500;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -1563,13 +1599,13 @@ a {
 .status-hero-main {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 
 .status-overall-dot {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--ink-3);
@@ -1577,7 +1613,7 @@ a {
 
 .status-hero.ok .status-overall-dot {
   background: var(--alive);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--alive) 16%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--alive) 16%, transparent);
 }
 
 .status-hero.degraded .status-overall-dot {
@@ -1586,11 +1622,14 @@ a {
 }
 
 .status-overall-text {
-  font-family: var(--font-serif);
-  font-size: 1.6rem;
-  font-weight: 500;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.status-hero.degraded .status-overall-text {
+  color: var(--dead);
 }
 
 .status-hero-sub {
@@ -1854,15 +1893,17 @@ a {
   }
 
   .status-hero {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 20px 18px;
+    gap: 12px;
+    padding: 16px 18px;
   }
 
-  .status-hero-metric {
-    align-items: flex-start;
-    padding-left: 30px;
+  .status-hero .obs-value {
+    font-size: 1.35rem;
+  }
+
+  .status-header .avatar-box {
+    width: 52px;
+    height: 52px;
   }
 
   .status-row .uptime-bars {
