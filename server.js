@@ -19,6 +19,7 @@ import { createNotifier } from './lib/notify.js';
 import { sanitizeProjects, writeJsonAtomic, tokenMatches, readBearerToken } from './lib/store.js';
 import { IconStore } from './lib/icons.js';
 import { fetchLimited } from './lib/fetch.js';
+import { LatencyWindow } from './lib/latency.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -168,32 +169,40 @@ function urlsMatch(a, b) {
 /* -------------------------------------------------------------------------- */
 
 const HEALTH_CACHE = new Map();
+const latencyWindow = new LatencyWindow();
 let healthCheckRunning = false;
 let globalProbeActive = 0;
 const globalProbeWaiters = [];
 
 const rateLimitMap = new Map();
 
+function deleteHealthCache(id) {
+  HEALTH_CACHE.delete(id);
+  latencyWindow.delete(id);
+}
+
 function pruneHealthCache() {
   const now = Date.now();
   for (const [key, value] of HEALTH_CACHE.entries()) {
     if (now - (value.lastChecked || 0) > HEALTH_CACHE_TTL_MS) {
-      HEALTH_CACHE.delete(key);
+      deleteHealthCache(key);
     }
   }
   while (HEALTH_CACHE.size > HEALTH_CACHE_MAX) {
-    const oldest = HEALTH_CACHE.keys().next().value;
-    HEALTH_CACHE.delete(oldest);
+    deleteHealthCache(HEALTH_CACHE.keys().next().value);
   }
 }
 
+/** 写入缓存时延迟换成近几次的中位数；返回实际缓存的结果 */
 function setHealthCache(id, payload) {
   pruneHealthCache();
   if (HEALTH_CACHE.size >= HEALTH_CACHE_MAX && !HEALTH_CACHE.has(id)) {
-    const oldest = HEALTH_CACHE.keys().next().value;
-    HEALTH_CACHE.delete(oldest);
+    deleteHealthCache(HEALTH_CACHE.keys().next().value);
   }
-  HEALTH_CACHE.set(id, payload);
+  const smoothed = latencyWindow.add(id, payload);
+  const entry = smoothed == null ? payload : { ...payload, latency: smoothed };
+  HEALTH_CACHE.set(id, entry);
+  return entry;
 }
 
 function isValidId(id) {
@@ -1105,10 +1114,7 @@ const server = http.createServer(async (req, res) => {
           error: probeResult.error || null,
           lastChecked: Date.now()
         };
-        results[job.id] = entry;
-        if (job.trusted) {
-          setHealthCache(job.id, entry);
-        }
+        results[job.id] = job.trusted ? setHealthCache(job.id, entry) : entry;
       });
 
       sendJson(res, 200, results);
@@ -1159,8 +1165,7 @@ const server = http.createServer(async (req, res) => {
             error: httpResult.error || null,
             lastChecked: Date.now()
           };
-          setHealthCache(id, entry);
-          sendJson(res, 200, entry);
+          sendJson(res, 200, setHealthCache(id, entry));
           return;
         }
       }
