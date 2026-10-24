@@ -1537,8 +1537,10 @@ a {
   gap: 5px;
   padding: 4px 10px;
   border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
+  /* 标签只说明页面用途，用中性色：红 / 绿留给真实的服务状态 */
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: 0.02em;
