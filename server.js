@@ -7,13 +7,13 @@ import https from 'https';
 import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 import { escapeHtml, safeJsonForHtmlScript } from './shared/escape.js';
-import { getGreeting } from './shared/greeting.js';
+import { getGreeting, formatDateLabel } from './shared/greeting.js';
 import { getProjectNativeFavicon } from './shared/favicon.js';
 import { parseHttpUrl } from './shared/url.js';
 import { validateProbeTarget, createPinnedLookup } from './shared/ssrf.js';
 import { renderUptimeStrip } from './shared/uptime.js';
 import { renderStatusBody } from './shared/statusPage.js';
-import { renderProjectCard } from './shared/card.js';
+import { renderProjectCard, renderPool, statusView } from './shared/card.js';
 import { HistoryStore } from './lib/history.js';
 import { createNotifier } from './lib/notify.js';
 import { sanitizeProjects, writeJsonAtomic, tokenMatches, readBearerToken } from './lib/store.js';
@@ -567,71 +567,63 @@ function resolveFaviconForProject(project, targetUrl) {
 function renderCardHtml(project) {
   const parsed = parseHttpUrl(project.customWanUrl || '', { maxLength: MAX_URL_LENGTH });
   const targetUrl = parsed ? parsed.href : '';
-
-  const health = HEALTH_CACHE.get(project.id);
-  let status = { cls: 'checking', label: '检测中' };
-  if (health) {
-    status = health.alive
-      ? { cls: 'online', label: health.latency != null ? `在线 · ${health.latency} ms` : '在线' }
-      : { cls: 'offline', label: '不可用' };
-  }
+  const pingEnabled = project.pingEnabled !== false;
 
   return renderProjectCard({
     id: project.id,
     title: project.title,
     url: targetUrl,
     iconSrc: resolveFaviconForProject(project, targetUrl),
-    status,
-    stripHtml: project.pingEnabled !== false ? renderUptimeStrip(project.id, null) : ''
+    status: pingEnabled ? statusView(HEALTH_CACHE.get(project.id)) : null,
+    stripHtml: pingEnabled ? renderUptimeStrip(project.id, null) : ''
   });
+}
+
+function computeServerMetrics(projects) {
+  const now = Date.now();
+  const pingable = projects.filter((p) => p.pingEnabled !== false);
+  const ids = new Set(projects.map((p) => p.id));
+
+  let checked = 0;
+  let online = 0;
+  const latencies = [];
+  const uptimes = [];
+  for (const project of pingable) {
+    const health = HEALTH_CACHE.get(project.id);
+    if (health) {
+      checked += 1;
+      if (health.alive) {
+        online += 1;
+        if (typeof health.latency === 'number') latencies.push(health.latency);
+      }
+    }
+    const uptime = historyStore.summary(project.id, now)?.uptime24h;
+    if (typeof uptime === 'number') uptimes.push(uptime);
+  }
+
+  const average = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
+  return {
+    total: projects.length,
+    pingable: pingable.length,
+    online: checked === pingable.length ? online : null,
+    uptime: average(uptimes),
+    latency: average(latencies),
+    event: historyStore.recentEvents(20).find((e) => ids.has(e.id)) || null,
+    now
+  };
 }
 
 function renderPageSSR(htmlTemplate) {
   const projects = loadServerProjects();
 
-  let onlineCount = 0;
-  let checkedCount = 0;
-  projects.forEach((p) => {
-    const h = HEALTH_CACHE.get(p.id);
-    if (!h) return;
-    checkedCount += 1;
-    if (h.alive) onlineCount += 1;
-  });
-  const onlineDisplay = checkedCount === 0 ? '—' : String(onlineCount);
-
   const now = new Date();
-  const hours = (now.getUTCHours() + 8) % 24;
-  const { greeting, icon } = getGreeting(hours);
-  const timeStr = `${String(hours).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-  const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${days[now.getDay()]}`;
+  // 服务器多为 UTC：问候语按东八区计算，避免凌晨显示「下午好」
+  const { greeting } = getGreeting((now.getUTCHours() + 8) % 24);
 
-  const poolHtml = `
-    <div class="category-section">
-      <div class="section-header">
-        <div class="section-header-inline">
-          <h2 class="sec-name">服务列表</h2>
-          <button class="section-refresh-btn" id="refreshPingBtn" title="重新探测服务状态">
-            <svg class="btn-svg spin-on-click" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 4v6h-6M1 20v-6h6"></path>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-            </svg>
-          </button>
-          <div class="stat-inline">
-            <span class="stat-label">服务</span>
-            <span class="stat-num" id="metricTotal">${projects.length}</span>
-          </div>
-          <div class="stat-inline">
-            <span class="stat-label">在线</span>
-            <span class="stat-num online" id="metricOnline">${escapeHtml(onlineDisplay)}</span>
-          </div>
-        </div>
-      </div>
-      <div class="cards-grid">
-        ${projects.map(renderCardHtml).join('')}
-      </div>
-    </div>
-  `;
+  const poolHtml = renderPool({
+    cardsHtml: projects.map(renderCardHtml).join(''),
+    metrics: computeServerMetrics(projects)
+  });
 
   const portalMeta = { adminEnabled: Boolean(ADMIN_TOKEN), notifyChannels: notifier.channels };
   const injectedScript =
@@ -643,10 +635,8 @@ function renderPageSSR(htmlTemplate) {
   const normalized = htmlTemplate.replace(/\r\n/g, '\n');
 
   return normalized
-    .replace('<span class="greeting-icon" id="greetingIcon">✨</span>', `<span class="greeting-icon" id="greetingIcon">${icon}</span>`)
-    .replace('<span class="greeting-text" id="greetingText">欢迎回来</span>', `<span class="greeting-text" id="greetingText">${escapeHtml(greeting)}</span>`)
-    .replace('<span class="clock-time" id="clockTime">00:00:00</span>', `<span class="clock-time" id="clockTime">${timeStr}</span>`)
-    .replace('<span class="clock-date" id="clockDate">2026年8月14日 星期五</span>', `<span class="clock-date" id="clockDate">${escapeHtml(dateStr)}</span>`)
+    .replace('<span id="greetingText">欢迎回来</span>', `<span id="greetingText">${escapeHtml(greeting)}</span>`)
+    .replace('<span id="clockDate"></span>', `<span id="clockDate">${escapeHtml(formatDateLabel(now))}</span>`)
     .replace(
       /<section class="project-pool" id="projectPool">\s*(?:<!--\s*Rendered dynamically\s*-->\s*)?<\/section>/,
       poolReplacement

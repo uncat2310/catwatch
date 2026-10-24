@@ -1,9 +1,9 @@
 import { DEFAULT_CONFIG } from './data/defaultConfig.js';
 import { PingService } from './services/pingService.js';
 import { escapeHtml } from '../shared/escape.js';
-import { getGreeting } from '../shared/greeting.js';
+import { getGreeting, formatDateLabel, formatClock } from '../shared/greeting.js';
 import { getProjectNativeFavicon, renderIconBox } from '../shared/favicon.js';
-import { renderProjectCard } from '../shared/card.js';
+import { renderProjectCard, renderPool, statusView, formatMetrics } from '../shared/card.js';
 import { isValidHttpUrl, parseHttpUrl } from '../shared/url.js';
 import { renderUptimeInner, renderUptimeStrip } from '../shared/uptime.js';
 
@@ -80,6 +80,7 @@ class App {
     this.lastFocusedBeforeModal = null;
     this.subtitleRevealed = false;
     this.historySummaries = {};
+    this.historyEvents = [];
     this.historyTimer = null;
     this.authResolver = null;
 
@@ -378,7 +379,9 @@ class App {
       if (!res.ok) return;
       const data = await res.json();
       this.historySummaries = data?.services || {};
+      this.historyEvents = Array.isArray(data?.events) ? data.events : [];
       this.updateUptimeStrips();
+      this.renderMetrics();
     } catch {
       // ignore
     }
@@ -575,23 +578,12 @@ class App {
   startClock() {
     const update = () => {
       const now = new Date();
-      const hours = now.getHours();
-      const timeStr = now.toTimeString().split(' ')[0];
       const clockTime = document.getElementById('clockTime');
       const clockDate = document.getElementById('clockDate');
       const greetingText = document.getElementById('greetingText');
-      const greetingIcon = document.getElementById('greetingIcon');
-
-      if (clockTime) clockTime.textContent = timeStr;
-      if (clockDate) {
-        const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-        clockDate.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${days[now.getDay()]}`;
-      }
-      if (greetingText && greetingIcon) {
-        const { greeting, icon } = getGreeting(hours);
-        greetingText.textContent = greeting;
-        greetingIcon.textContent = icon;
-      }
+      if (clockTime) clockTime.textContent = formatClock(now);
+      if (clockDate) clockDate.textContent = formatDateLabel(now);
+      if (greetingText) greetingText.textContent = getGreeting(now.getHours()).greeting;
     };
 
     update();
@@ -607,9 +599,6 @@ class App {
           this.clockTimer = null;
         }
       } else {
-        const now = new Date();
-        const clockTime = document.getElementById('clockTime');
-        if (clockTime) clockTime.textContent = now.toTimeString().split(' ')[0];
         this.startClock();
         this.pingService.resume();
       }
@@ -632,21 +621,44 @@ class App {
     }
   }
 
-  renderMetrics() {
-    const total = this.config.projects.length;
-    const pingable = this.config.projects.filter((p) => p.pingEnabled);
+  collectMetrics() {
+    const projects = this.config.projects;
+    const pingable = projects.filter((p) => p.pingEnabled);
     const results = pingable.map((p) => this.statusMap[p.id]).filter(Boolean);
     const allDone =
       pingable.length === 0 ||
       (results.length === pingable.length && results.every((st) => !st.checking));
 
-    let onlineCount = 0;
-    if (allDone) onlineCount = results.filter((st) => st.alive).length;
+    const average = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
+    const ids = new Set(projects.map((p) => p.id));
+    const latencies = results.filter((st) => st.alive && typeof st.latency === 'number').map((st) => st.latency);
+    const uptimes = pingable
+      .map((p) => this.historySummaries[p.id]?.uptime24h)
+      .filter((u) => typeof u === 'number');
 
-    const metricTotal = document.getElementById('metricTotal');
-    const metricOnline = document.getElementById('metricOnline');
-    if (metricTotal) metricTotal.textContent = String(total);
-    if (metricOnline) metricOnline.textContent = allDone ? String(onlineCount) : '—';
+    return {
+      total: projects.length,
+      pingable: pingable.length,
+      online: allDone ? results.filter((st) => st.alive).length : null,
+      uptime: average(uptimes),
+      latency: average(latencies),
+      event: this.historyEvents.find((e) => ids.has(e.id)) || null,
+      now: Date.now()
+    };
+  }
+
+  renderMetrics() {
+    const v = formatMetrics(this.collectMetrics());
+    const set = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    };
+    set('metricOnline', v.online);
+    set('metricTotal', v.total);
+    set('metricUptime', v.uptime);
+    set('metricLatency', v.latency);
+    set('metricEvent', v.event);
+    document.getElementById('metricDot')?.setAttribute('data-level', v.level);
   }
 
   updateMetrics() {
@@ -657,46 +669,13 @@ class App {
     const pool = document.getElementById('projectPool');
     if (!pool) return;
 
-    if (this.config.projects.length === 0) {
-      pool.innerHTML = `
-        <div class="empty-category-notice">
-          <p>当前暂无服务，点击右上角「添加服务」开始创建。</p>
-        </div>
-      `;
-      return;
-    }
-
-    const projects = this.config.projects;
-    pool.innerHTML = `
-      <div class="category-section">
-        <div class="section-header">
-          <div class="section-header-inline">
-            <h2 class="sec-name">服务列表</h2>
-            <button class="section-refresh-btn" id="refreshPingBtn" title="重新探测服务状态" type="button">
-              <svg class="btn-svg spin-on-click" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M23 4v6h-6M1 20v-6h6"></path>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-              </svg>
-            </button>
-            <div class="stat-inline">
-              <span class="stat-label">服务</span>
-              <span class="stat-num" id="metricTotal">${projects.length}</span>
-            </div>
-            <div class="stat-inline">
-              <span class="stat-label">在线</span>
-              <span class="stat-num online" id="metricOnline">—</span>
-            </div>
-          </div>
-        </div>
-        <div class="cards-grid">
-          ${projects.map((p, index) => this.renderProjectCard(p, index)).join('')}
-        </div>
-      </div>
-    `;
+    pool.innerHTML = renderPool({
+      cardsHtml: this.config.projects.map((p, index) => this.renderProjectCard(p, index)).join(''),
+      metrics: this.collectMetrics()
+    });
 
     this.bindRefreshBtn();
     this.updateStatusBadges();
-    this.renderMetrics();
   }
 
   bindRefreshBtn() {
@@ -722,7 +701,7 @@ class App {
       title: project.title,
       url: targetUrl,
       iconSrc: cachedFavicon(targetUrl),
-      status: { cls: 'checking', label: '检测中' },
+      status: project.pingEnabled ? statusView(this.statusMap[project.id]) : null,
       stripHtml: this.hasUptimeStrip(project)
         ? renderUptimeStrip(project.id, this.historySummaries[project.id] || null, formatSlotTime)
         : '',
@@ -741,19 +720,11 @@ class App {
         return;
       }
 
-      el.style.display = 'flex';
+      const view = statusView(st);
+      el.style.display = '';
+      el.className = `card-status-badge ${view.cls}`;
       const textEl = el.querySelector('.status-text');
-      if (st.checking) {
-        el.className = 'card-status-badge checking';
-        if (textEl) textEl.textContent = '检测中';
-      } else if (st.alive) {
-        el.className = 'card-status-badge online';
-        const msText = st.latency != null ? ` · ${st.latency} ms` : '';
-        if (textEl) textEl.textContent = `在线${msText}`;
-      } else {
-        el.className = 'card-status-badge offline';
-        if (textEl) textEl.textContent = '不可用';
-      }
+      if (textEl) textEl.textContent = view.label;
     });
   }
 
