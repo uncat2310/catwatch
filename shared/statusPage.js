@@ -71,7 +71,7 @@ export function renderStatusBody(payload, formatTime) {
         <span class="status-overall-dot"></span>
         <div>
           <p class="status-overall-text">${escapeHtml(overall.text)}</p>
-          <p class="status-hero-sub">${services.length} 个公开服务 · 每分钟自动刷新</p>
+          <p class="status-hero-sub">共 ${services.length} 个服务</p>
         </div>
       </div>
       ${

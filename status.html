@@ -31,8 +31,24 @@
 <body>
   <div class="app-container status-container">
     <header class="status-header">
-      <p class="masthead-eyebrow">猫咪值班室<span class="eyebrow-sep" aria-hidden="true">/</span>公开状态</p>
-      <h1 class="brand-title">服务状态</h1>
+      <div class="profile-brand">
+        <div class="avatar-box">
+          <!-- 走 /assets/：公开状态页可能挂在访问控制后面，只放行了 /assets/* -->
+          <img src="./src/assets/avatar-160.jpg" alt="" class="avatar-img" width="44" height="44" />
+        </div>
+        <div class="brand-text">
+          <div class="status-title-row">
+            <h1 class="brand-title">猫咪值班室</h1>
+            <span class="status-page-tag">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              服务状态
+            </span>
+          </div>
+          <p class="brand-subtitle">这些服务有猫在值班，每分钟自动刷新</p>
+        </div>
+      </div>
     </header>
 
     <main class="status-main" id="statusRoot"></main>
