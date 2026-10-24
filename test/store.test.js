@@ -9,9 +9,10 @@ test('sanitizeProjects normalizes and strips unknown fields', () => {
   const result = sanitizeProjects([
     { id: 'p-1', title: '  Blog  ', customWanUrl: 'https://blog.example', pingEnabled: false, evil: '<script>' }
   ]);
+  assert.equal(sanitizeProjects([{ id: 'a', title: 'A', customWanUrl: 'https://a.example', statusPublic: 'yes' }]).projects[0].statusPublic, false, 'only literal true opts in');
   assert.equal(result.ok, true);
   assert.deepEqual(result.projects, [
-    { id: 'p-1', categoryId: 'services', title: 'Blog', customWanUrl: 'https://blog.example/', pingEnabled: false }
+    { id: 'p-1', categoryId: 'services', title: 'Blog', customWanUrl: 'https://blog.example/', pingEnabled: false, statusPublic: false }
   ]);
 });
 

@@ -176,7 +176,9 @@ class App {
 
   sameProjects(a, b) {
     const key = (list) =>
-      JSON.stringify((list || []).map((p) => [p.id, p.title, parseHttpUrl(p.customWanUrl)?.href || '', p.pingEnabled !== false]));
+      JSON.stringify(
+        (list || []).map((p) => [p.id, p.title, parseHttpUrl(p.customWanUrl)?.href || '', p.pingEnabled !== false, p.statusPublic === true])
+      );
     return key(a) === key(b);
   }
 
@@ -1019,13 +1021,17 @@ class App {
       document.getElementById('formTitle').value = proj.title || '';
       document.getElementById('formCustomWan').value = proj.customWanUrl || '';
       document.getElementById('formPing').checked = Boolean(proj.pingEnabled);
+      document.getElementById('formStatusPublic').checked = proj.statusPublic === true;
     } else {
       titleEl.textContent = '添加新服务';
       document.getElementById('formProjectId').value = '';
       document.getElementById('formTitle').value = '';
       document.getElementById('formCustomWan').value = '';
       document.getElementById('formPing').checked = true;
+      document.getElementById('formStatusPublic').checked = false;
     }
+    // 公开状态页读取服务器配置，本地模式下该选项没有意义
+    document.getElementById('statusPublicGroup').hidden = !this.serverMode;
     this.openOverlay('projectModalOverlay', '#formTitle');
   }
 
@@ -1038,6 +1044,10 @@ class App {
     const title = document.getElementById('formTitle').value.trim();
     const customWanUrlRaw = document.getElementById('formCustomWan').value.trim();
     const pingEnabled = document.getElementById('formPing').checked;
+    const existing = this.config.projects.find((p) => p.id === id);
+    const statusPublic = this.serverMode
+      ? document.getElementById('formStatusPublic').checked
+      : existing?.statusPublic === true;
 
     if (!title) {
       this.showToast('请填写服务名称', '⚠️');
@@ -1055,7 +1065,8 @@ class App {
       title,
       categoryId: 'services',
       customWanUrl: parsedUrl.href,
-      pingEnabled
+      pingEnabled,
+      statusPublic
     };
 
     const nextProjects = [...this.config.projects];
