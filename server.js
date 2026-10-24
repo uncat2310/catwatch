@@ -6,13 +6,14 @@ import net from 'net';
 import https from 'https';
 import zlib from 'zlib';
 import { fileURLToPath } from 'url';
-import { escapeHtml, escapeAttribute, safeJsonForHtmlScript } from './shared/escape.js';
+import { escapeHtml, safeJsonForHtmlScript } from './shared/escape.js';
 import { getGreeting } from './shared/greeting.js';
 import { getProjectNativeFavicon } from './shared/favicon.js';
 import { parseHttpUrl } from './shared/url.js';
 import { validateProbeTarget, createPinnedLookup } from './shared/ssrf.js';
 import { renderUptimeStrip } from './shared/uptime.js';
 import { renderStatusBody } from './shared/statusPage.js';
+import { renderProjectCard } from './shared/card.js';
 import { HistoryStore } from './lib/history.js';
 import { createNotifier } from './lib/notify.js';
 import { sanitizeProjects, writeJsonAtomic, tokenMatches, readBearerToken } from './lib/store.js';
@@ -564,85 +565,25 @@ function resolveFaviconForProject(project, targetUrl) {
 }
 
 function renderCardHtml(project) {
-  const rawUrl = project.customWanUrl || '';
-  const parsed = parseHttpUrl(rawUrl, { maxLength: MAX_URL_LENGTH });
-  const targetUrl = parsed ? parsed.href : '#';
-  const hostname = parsed ? parsed.hostname : '';
-  const iconSrc = resolveFaviconForProject(project, parsed ? parsed.href : '');
-  const title = project.title || '未命名服务';
+  const parsed = parseHttpUrl(project.customWanUrl || '', { maxLength: MAX_URL_LENGTH });
+  const targetUrl = parsed ? parsed.href : '';
 
   const health = HEALTH_CACHE.get(project.id);
-  let statusClass = 'checking';
-  let statusLabel = '检测中';
+  let status = { cls: 'checking', label: '检测中' };
   if (health) {
-    if (health.alive) {
-      statusClass = 'online';
-      statusLabel = health.latency != null ? `在线 · ${health.latency} ms` : '在线';
-    } else {
-      statusClass = 'offline';
-      statusLabel = '不可用';
-    }
+    status = health.alive
+      ? { cls: 'online', label: health.latency != null ? `在线 · ${health.latency} ms` : '在线' }
+      : { cls: 'offline', label: '不可用' };
   }
 
-  const safeId = escapeAttribute(project.id || '');
-  const safeTitle = escapeHtml(title);
-  const safeTitleAttr = escapeAttribute(title);
-  const safeUrl = escapeAttribute(targetUrl);
-  const safeIcon = escapeAttribute(iconSrc);
-  const safeHost = escapeHtml(hostname);
-
-  return `
-    <div class="project-card" data-id="${safeId}" data-url="${safeUrl}" tabindex="0" role="link">
-      <div class="card-top">
-        <div class="card-identity">
-          <div class="card-icon-box">
-            <img src="${safeIcon}" alt="${safeTitleAttr}" width="28" height="28" class="card-favicon-img" loading="eager" decoding="async" onerror="this.onerror=null;this.src='/favicon.svg';" />
-          </div>
-          <div class="card-text">
-            <div class="card-title" title="${safeTitleAttr}">${safeTitle}</div>
-            ${hostname ? `<div class="card-hostname">${safeHost}</div>` : ''}
-          </div>
-        </div>
-        <div class="card-status-badge ${statusClass}" id="status-${safeId}">
-          <span class="status-dot"></span>
-          <span class="status-text">${escapeHtml(statusLabel)}</span>
-        </div>
-      </div>
-
-      ${project.pingEnabled !== false ? renderUptimeStrip(project.id, null) : ''}
-
-      <div class="card-footer">
-        <div class="card-manage-actions">
-          <button class="card-action-btn copy-btn" data-url="${safeUrl}" title="复制直达链接">
-            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-          </button>
-          <button class="card-action-btn edit-btn" data-id="${safeId}" title="编辑服务">
-            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </button>
-          <button class="card-action-btn delete-btn" data-id="${safeId}" title="删除服务">
-            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-          </button>
-        </div>
-        <a href="${safeUrl}" target="_blank" rel="noreferrer" class="btn-launch" title="直达打开服务">
-          <span>直达</span>
-          <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
-          </svg>
-        </a>
-      </div>
-    </div>
-  `;
+  return renderProjectCard({
+    id: project.id,
+    title: project.title,
+    url: targetUrl,
+    iconSrc: resolveFaviconForProject(project, targetUrl),
+    status,
+    stripHtml: project.pingEnabled !== false ? renderUptimeStrip(project.id, null) : ''
+  });
 }
 
 function renderPageSSR(htmlTemplate) {

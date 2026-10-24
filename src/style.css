@@ -670,7 +670,6 @@ body::before {
   transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-fast), background-color var(--transition-fast);
   box-shadow: var(--shadow-card);
   cursor: pointer;
-  min-height: 118px;
   touch-action: manipulation;
   animation: cardEnter 420ms ease both;
 }
@@ -733,6 +732,59 @@ body::before {
   transition: transform var(--transition-smooth);
 }
 
+.card-monogram {
+  display: none;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: hsl(var(--mono-hue, 30) 26% 38%);
+}
+
+.card-icon-box.is-monogram {
+  padding: 0;
+  background: hsl(var(--mono-hue, 30) 30% 92%);
+  border-color: hsl(var(--mono-hue, 30) 24% 84%);
+}
+
+.card-icon-box.is-monogram .card-monogram {
+  display: flex;
+}
+
+[data-theme="dark"] .card-icon-box.is-monogram {
+  background: hsl(var(--mono-hue, 30) 16% 18%);
+  border-color: hsl(var(--mono-hue, 30) 14% 25%);
+}
+
+[data-theme="dark"] .card-monogram {
+  color: hsl(var(--mono-hue, 30) 32% 74%);
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .card-icon-box.is-monogram {
+    background: hsl(var(--mono-hue, 30) 16% 18%);
+    border-color: hsl(var(--mono-hue, 30) 14% 25%);
+  }
+
+  [data-theme="auto"] .card-monogram {
+    color: hsl(var(--mono-hue, 30) 32% 74%);
+  }
+}
+
+.card-icon-box.icon-sm {
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  border-radius: var(--radius-xs);
+}
+
+.card-icon-box.icon-sm .card-monogram {
+  font-size: 0.72rem;
+}
+
 .card-favicon-img {
   width: 100%;
   height: 100%;
@@ -749,13 +801,37 @@ body::before {
 }
 
 .card-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   font-size: 1.02rem;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.015em;
+  text-decoration: none;
+}
+
+.card-title-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.card-title-arrow {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  opacity: 0;
+  transform: translate(-3px, 3px);
+  transition: opacity var(--transition-fast), transform var(--transition-normal);
+}
+
+.project-card:hover .card-title-arrow,
+.project-card:focus-visible .card-title-arrow {
+  opacity: 1;
+  transform: none;
 }
 
 .card-hostname {
@@ -824,25 +900,40 @@ body::before {
 }
 
 /* Card Action Row */
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 6px;
-  gap: 8px;
-}
-
 .card-manage-actions {
+  position: absolute;
+  top: 21px;
+  right: 16px;
   display: flex;
   align-items: center;
   gap: 2px;
-  opacity: 0.45;
-  transition: opacity var(--transition-fast);
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-normal);
 }
 
 .project-card:hover .card-manage-actions,
-.project-card:focus-within .card-manage-actions {
+.project-card:focus-visible .card-manage-actions,
+.project-card:has(:focus-visible) .card-manage-actions {
   opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.card-status-badge {
+  transition: opacity var(--transition-fast);
+}
+
+.project-card:hover .card-status-badge,
+.project-card:focus-visible .card-status-badge,
+.project-card:has(:focus-visible) .card-status-badge {
+  opacity: 0;
 }
 
 .card-action-btn {
@@ -850,13 +941,18 @@ body::before {
   border: none;
   color: var(--text-muted);
   padding: 5px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-full);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: var(--transition-fast);
   touch-action: manipulation;
+}
+
+.card-action-btn .btn-svg {
+  width: 14px;
+  height: 14px;
 }
 
 .card-action-btn:hover {
@@ -869,34 +965,26 @@ body::before {
   background: var(--color-offline-bg);
 }
 
-.btn-launch {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--accent-badge-bg) 55%, transparent);
-  color: var(--text-secondary);
-  font-size: 0.76rem;
-  font-weight: 600;
-  text-decoration: none;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
-  touch-action: manipulation;
-}
+/* 触屏设备没有悬停：管理按钮常驻在卡片底部右侧 */
+@media (hover: none) {
+  .card-manage-actions {
+    position: static;
+    align-self: flex-end;
+    margin: -6px -6px -8px 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
 
-.btn-launch .btn-svg {
-  opacity: 0.85;
-}
-
-.btn-launch:hover {
-  background: var(--accent-badge-bg);
-  border-color: var(--border-card-hover);
-  color: var(--accent-badge-text);
-}
-
-.btn-launch:hover .btn-svg {
-  opacity: 1;
+  .project-card:hover .card-status-badge,
+  .project-card:focus-visible .card-status-badge,
+  .project-card:has(:focus-visible) .card-status-badge {
+    opacity: 1;
+  }
 }
 
 /* Empty State */
@@ -1088,6 +1176,19 @@ body::before {
   font-size: 1rem;
   color: var(--text-primary);
   outline: none;
+}
+
+.palette-input:focus-visible {
+  outline: none;
+}
+
+.checkbox-container input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
 }
 
 .search-results-list {
@@ -1286,21 +1387,28 @@ body::before {
     justify-content: flex-start;
   }
 
+  /* 手机自带时钟：隐藏问候与时间，把空间留给操作 */
   .header-center {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-subtle);
+    display: none;
   }
 
   .header-actions {
     display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 6px;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 8px;
     width: 100%;
     justify-self: stretch;
+  }
+
+  #addProjectBtn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  #addProjectBtn span {
+    display: none;
   }
 
   .search-trigger-btn {
@@ -1328,12 +1436,8 @@ body::before {
   .project-card {
     padding: 14px 16px;
     border-radius: var(--radius-md);
-    min-height: 96px;
   }
 
-  .card-manage-actions {
-    opacity: 0.85;
-  }
 
   .modal-overlay {
     align-items: flex-end;
@@ -1372,6 +1476,18 @@ body::before {
 @keyframes slideUpMobile {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+/* 中等宽度：按钮不折行，快捷键提示让位 */
+.btn,
+.search-trigger-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .header-actions .kbd-badge {
+    display: none;
+  }
 }
 
 /* Uptime strip (24h) */

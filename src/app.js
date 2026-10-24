@@ -1,8 +1,9 @@
 import { DEFAULT_CONFIG } from './data/defaultConfig.js';
 import { PingService } from './services/pingService.js';
-import { escapeHtml, escapeAttribute } from '../shared/escape.js';
+import { escapeHtml } from '../shared/escape.js';
 import { getGreeting } from '../shared/greeting.js';
-import { getProjectNativeFavicon } from '../shared/favicon.js';
+import { getProjectNativeFavicon, renderIconBox } from '../shared/favicon.js';
+import { renderProjectCard } from '../shared/card.js';
 import { isValidHttpUrl, parseHttpUrl } from '../shared/url.js';
 import { renderUptimeInner, renderUptimeStrip } from '../shared/uptime.js';
 
@@ -470,25 +471,7 @@ class App {
 
   enhanceExistingCards() {
     document.querySelectorAll('.project-card').forEach((card, index) => {
-      card.tabIndex = 0;
-      card.setAttribute('role', 'link');
       card.style.animationDelay = `${Math.min(index * 28, 200)}ms`;
-      if (!card.querySelector('.card-hostname')) {
-        const project = this.config.projects.find((p) => p.id === card.getAttribute('data-id'));
-        if (!project) return;
-        const host = this.getHostname(this.buildProjectUrl(project));
-        const titleEl = card.querySelector('.card-title');
-        if (titleEl && host) {
-          const wrap = document.createElement('div');
-          wrap.className = 'card-text';
-          titleEl.replaceWith(wrap);
-          wrap.appendChild(titleEl);
-          const hostEl = document.createElement('div');
-          hostEl.className = 'card-hostname';
-          hostEl.textContent = host;
-          wrap.appendChild(hostEl);
-        }
-      }
     });
   }
 
@@ -734,62 +717,17 @@ class App {
 
   renderProjectCard(project, index = 0) {
     const targetUrl = this.buildProjectUrl(project);
-    const href = targetUrl || '#';
-    const nativeFaviconUrl = cachedFavicon(targetUrl);
-    const title = project.title || '未命名服务';
-    const host = this.getHostname(targetUrl);
-    const delay = Math.min(index * 28, 200);
-
-    return `
-      <div class="project-card" data-id="${escapeAttribute(project.id)}" data-url="${escapeAttribute(href)}" tabindex="0" role="link" style="animation-delay:${delay}ms">
-        <div class="card-top">
-          <div class="card-identity">
-            <div class="card-icon-box">
-              <img src="${escapeAttribute(nativeFaviconUrl)}" alt="${escapeAttribute(title)}" width="28" height="28" class="card-favicon-img" onerror="this.onerror=null;this.src='/favicon.svg';" />
-            </div>
-            <div class="card-text">
-              <div class="card-title" title="${escapeAttribute(title)}">${escapeHtml(title)}</div>
-              ${host ? `<div class="card-hostname">${escapeHtml(host)}</div>` : ''}
-            </div>
-          </div>
-          <div class="card-status-badge checking" id="status-${escapeAttribute(project.id)}">
-            <span class="status-dot"></span>
-            <span class="status-text">检测中</span>
-          </div>
-        </div>
-        ${this.hasUptimeStrip(project) ? renderUptimeStrip(project.id, this.historySummaries[project.id] || null, formatSlotTime) : ''}
-        <div class="card-footer">
-          <div class="card-manage-actions">
-            <button class="card-action-btn copy-btn" data-url="${escapeAttribute(href)}" title="复制直达链接" type="button">
-              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-            <button class="card-action-btn edit-btn" data-id="${escapeAttribute(project.id)}" title="编辑服务" type="button">
-              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-            <button class="card-action-btn delete-btn" data-id="${escapeAttribute(project.id)}" title="删除服务" type="button">
-              <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-          </div>
-          <a href="${escapeAttribute(href)}" target="_blank" rel="noreferrer" class="btn-launch" title="直达打开服务">
-            <span>直达</span>
-            <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-          </a>
-        </div>
-      </div>
-    `;
+    return renderProjectCard({
+      id: project.id,
+      title: project.title,
+      url: targetUrl,
+      iconSrc: cachedFavicon(targetUrl),
+      status: { cls: 'checking', label: '检测中' },
+      stripHtml: this.hasUptimeStrip(project)
+        ? renderUptimeStrip(project.id, this.historySummaries[project.id] || null, formatSlotTime)
+        : '',
+      delayMs: Math.min(index * 28, 200)
+    });
   }
 
   updateStatusBadges() {
@@ -1143,7 +1081,7 @@ class App {
         return `
           <div class="search-result-item ${isSelected ? 'selected' : ''}" data-idx="${idx}">
             <div class="search-result-left">
-              <img src="${escapeAttribute(nativeFaviconUrl)}" alt="" width="20" height="20" style="width:20px;height:20px;object-fit:contain;border-radius:4px;" onerror="this.onerror=null;this.src='/favicon.svg';" />
+              ${renderIconBox(title, nativeFaviconUrl, 'icon-sm')}
               <div>
                 <div class="search-result-title">${escapeHtml(title)}</div>
                 ${host ? `<div class="search-result-host">${escapeHtml(host)}</div>` : ''}
