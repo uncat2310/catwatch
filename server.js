@@ -5,18 +5,20 @@ import dns from 'dns/promises';
 import net from 'net';
 import https from 'https';
 import zlib from 'zlib';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { escapeHtml, safeJsonForHtmlScript } from './shared/escape.js';
 import { getGreeting, formatDateLabel } from './shared/greeting.js';
-import { getProjectNativeFavicon } from './shared/favicon.js';
 import { parseHttpUrl } from './shared/url.js';
 import { validateProbeTarget, createPinnedLookup } from './shared/ssrf.js';
 import { renderUptimeStrip } from './shared/uptime.js';
 import { renderStatusBody } from './shared/statusPage.js';
-import { renderProjectCard, renderPool, statusView } from './shared/card.js';
+import { renderProjectCard, renderPool, statusView, aggregateSeries } from './shared/card.js';
 import { HistoryStore } from './lib/history.js';
 import { createNotifier } from './lib/notify.js';
 import { sanitizeProjects, writeJsonAtomic, tokenMatches, readBearerToken } from './lib/store.js';
+import { IconStore } from './lib/icons.js';
+import { fetchLimited } from './lib/fetch.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +34,8 @@ const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || '').trim();
 const CONFIG_PATH = path.join(__dirname, 'config', 'projects.json');
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const HISTORY_PATH = path.join(DATA_DIR, 'history.json');
+const ICON_DIR = path.join(DATA_DIR, 'icons');
+const ICON_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_PROJECTS_BODY_BYTES = 256 * 1024;
@@ -134,7 +138,10 @@ function saveServerProjects(projects) {
   writeJsonAtomic(CONFIG_PATH, projects);
   projectsCache = { mtimeMs: null, projects: null, trustedById: null };
   const saved = loadServerProjects();
-  historyStore.prune(new Set(saved.map((p) => p.id)));
+  const ids = new Set(saved.map((p) => p.id));
+  historyStore.prune(ids);
+  iconStore.prune(ids);
+  iconStore.warm(saved);
   return saved;
 }
 
@@ -424,6 +431,42 @@ function loadHistoryStore() {
 const historyStore = loadHistoryStore();
 const notifier = createNotifier();
 
+// 服务图标由服务端抓取：同源返回，避免混合内容拦截，也不把域名发给第三方
+const iconStore = new IconStore({
+  dir: ICON_DIR,
+  fetcher: (url, options) => fetchLimited(url, { ...options, insecureTls: ALLOW_INSECURE_TLS })
+});
+setTimeout(() => iconStore.warm(loadServerProjects()), 3000).unref?.();
+setInterval(() => iconStore.warm(loadServerProjects()), ICON_REFRESH_INTERVAL_MS).unref?.();
+
+/** 公开状态页使用的图标地址：不暴露内部 ID */
+function statusIconKey(id) {
+  return crypto.createHash('sha256').update(`status-icon:${id}`).digest('hex').slice(0, 16);
+}
+
+async function sendIcon(req, res, project) {
+  const icon = project?.customWanUrl ? await iconStore.get(project) : null;
+  if (!icon) {
+    res.writeHead(404, { 'Cache-Control': 'no-cache' });
+    res.end();
+    return;
+  }
+  const headers = {
+    'Content-Type': icon.contentType,
+    'Cache-Control': 'no-cache',
+    ETag: icon.etag,
+    // SVG 来自第三方服务：禁止脚本，防止直接打开时在本站执行
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+  };
+  if (req.headers['if-none-match'] === icon.etag) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(200, headers);
+  res.end(icon.buffer);
+}
+
 function saveHistory() {
   if (!historyStore.dirty) return;
   try {
@@ -515,6 +558,7 @@ function buildStatusPayload() {
     }
     return {
       title: titleById.get(p.id),
+      icon: `/api/status-icon/${statusIconKey(p.id)}`,
       state,
       uptime24h: summary?.uptime24h ?? null,
       uptime7d: summary?.uptime7d ?? null,
@@ -576,8 +620,8 @@ function isAdminRequest(req) {
 /* SSR                                                                       */
 /* -------------------------------------------------------------------------- */
 
-function resolveFaviconForProject(project, targetUrl) {
-  return getProjectNativeFavicon(targetUrl || project.customWanUrl);
+function iconUrlFor(project) {
+  return `/api/icon/${encodeURIComponent(project.id)}`;
 }
 
 function renderCardHtml(project) {
@@ -589,7 +633,7 @@ function renderCardHtml(project) {
     id: project.id,
     title: project.title,
     url: targetUrl,
-    iconSrc: resolveFaviconForProject(project, targetUrl),
+    iconSrc: targetUrl ? iconUrlFor(project) : '',
     status: pingEnabled ? statusView(HEALTH_CACHE.get(project.id)) : null,
     stripHtml: pingEnabled ? renderUptimeStrip(project.id, null) : ''
   });
@@ -604,8 +648,11 @@ function computeServerMetrics(projects) {
   let online = 0;
   const latencies = [];
   const uptimes = [];
+  const summaries = [];
+  const services = [];
   for (const project of pingable) {
     const health = HEALTH_CACHE.get(project.id);
+    services.push({ title: project.title || '未命名服务', cls: statusView(health).cls });
     if (health) {
       checked += 1;
       if (health.alive) {
@@ -613,8 +660,9 @@ function computeServerMetrics(projects) {
         if (typeof health.latency === 'number') latencies.push(health.latency);
       }
     }
-    const uptime = historyStore.summary(project.id, now)?.uptime24h;
-    if (typeof uptime === 'number') uptimes.push(uptime);
+    const summary = historyStore.summary(project.id, now);
+    if (summary) summaries.push(summary);
+    if (typeof summary?.uptime24h === 'number') uptimes.push(summary.uptime24h);
   }
 
   const average = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
@@ -625,6 +673,8 @@ function computeServerMetrics(projects) {
     uptime: average(uptimes),
     latency: average(latencies),
     event: historyStore.recentEvents(20).find((e) => ids.has(e.id)) || null,
+    services,
+    series: aggregateSeries(summaries),
     now
   };
 }
@@ -891,6 +941,27 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       await sendHtml(req, res, renderStatusSSR(statusEntry.text));
+      return;
+    }
+
+    const iconMatch = pathname.match(/^\/api\/icon\/([^/]+)$/);
+    if (iconMatch && req.method === 'GET') {
+      let id = '';
+      try {
+        id = decodeURIComponent(iconMatch[1]);
+      } catch {
+        // 非法编码按不存在处理
+      }
+      await sendIcon(req, res, getTrustedProjectMap().get(id));
+      return;
+    }
+
+    const statusIconMatch = pathname.match(/^\/api\/status-icon\/([0-9a-f]{16})$/);
+    if (statusIconMatch && req.method === 'GET') {
+      const project = loadServerProjects().find(
+        (p) => p.statusPublic === true && statusIconKey(p.id) === statusIconMatch[1]
+      );
+      await sendIcon(req, res, project);
       return;
     }
 

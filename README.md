@@ -42,7 +42,7 @@
 - 🔔 **掉线 / 恢复通知**：连续 3 次探测失败才判定离线（防抖），支持 Telegram、Bark、Server酱、通用 Webhook。
 - 🌐 **公开状态页 `/status`**：只展示你勾选公开的服务，只有名称、状态和 24h 可用率，不暴露任何链接或域名，适合分享给朋友。
 - ☁️ **服务器同步编辑**：设置 `ADMIN_TOKEN` 后，页面上的增删改直接写回 `config/projects.json`，所有设备一致；未设置时保持浏览器本地编辑。
-- 🖼️ **自动 Favicon 识别**：自建服务优先同源路径；公开站点域名 fallback；失败回退本地图标。
+- 🖼️ **服务图标自动获取**：服务端读取服务页面声明的图标并缓存，同源加载；可手动指定；拿不到时显示首字母头像。
 - 🐳 **Docker / Compose / Node / PM2** 多种部署方式。
 
 ---
@@ -219,7 +219,7 @@ docker run -d \
 
 ```caddy
 portal.example.com {
-    @public path /status /api/status /assets/* /favicon.svg
+    @public path /status /api/status /api/status-icon/* /assets/* /favicon.svg
     handle @public {
         reverse_proxy 127.0.0.1:3000
     }
@@ -256,15 +256,22 @@ portal.example.com {
 
 ---
 
-## 🖼️ Favicon 说明
+## 🖼️ 服务图标
 
-**自动 Favicon 识别**含义是：
+图标由**服务端**获取并缓存，浏览器统一从同源的 `/api/icon/<服务ID>` 加载：
 
-- 针对常见自建服务识别原生 favicon 路径
-- 对公开网站使用域名 favicon fallback（如 DuckDuckGo icons）
-- 加载失败回退本地 `/favicon.svg`
+1. 编辑服务时填写的「图标地址」优先
+2. 否则读取服务首页 HTML 中声明的 `<link rel="icon">` / `apple-touch-icon`，优先 SVG 和高分辨率图标
+3. 再退回站点根目录的 `/favicon.ico`
+4. 都拿不到时显示首字母头像（颜色由服务名称决定）
 
-当前实现**不会**解析目标站点 HTML 中的 `<link rel="icon">`。第三方 fallback 可能向第三方服务暴露公开 hostname；自建服务优先走同源路径，避免误导为“端到端抓取原版 favicon”。
+说明：
+
+- 只抓取 `config/projects.json` 中的服务；跨主机的图标地址按公网规则做 SSRF 校验；响应限制大小并按文件头确认确实是图片（登录页之类的 HTML 不会被当成图标）
+- 缓存在 `DATA_DIR/icons/`，24 小时刷新一次；源站暂时不可用时继续使用旧图标
+- 不经过任何第三方图标服务，也不会因为门户是 HTTPS 而被浏览器拦截 HTTP 服务的图标
+- 公开状态页使用不含服务 ID 的 `/api/status-icon/<随机键>`，只对已公开的服务返回图标
+- 仅保存在浏览器本地的服务（本地模式下自行添加的）由浏览器直接加载手动图标地址或站点 `/favicon.ico`
 
 ---
 
@@ -341,7 +348,7 @@ schrodinger-portal/
 │   └── projects.example.json    # 公开示例配置（复制为 projects.json）
 ├── docs/screenshots/            # README 真实界面截图
 ├── shared/                      # 前后端共用小工具（转义 / URL / 问候 / favicon / SSRF / 可用率条）
-├── lib/                         # 服务端模块：探测历史、通知、配置写入
+├── lib/                         # 服务端模块：探测历史、通知、配置写入、图标抓取
 ├── test/                        # node:test 单元测试
 ├── src/
 │   ├── data/defaultConfig.js    # 前端默认配置
