@@ -7,7 +7,7 @@ import { renderUptimeInner } from './uptime.js';
 
 const STATE_VIEW = {
   up: { cls: 'online', text: '正常' },
-  down: { cls: 'offline', text: '不可用' },
+  down: { cls: 'offline', text: '离线' },
   unknown: { cls: 'checking', text: '检测中' }
 };
 
@@ -19,7 +19,7 @@ export function overallStatus(services) {
   if (down === 0) {
     return { level: 'ok', text: '全部服务运行正常' };
   }
-  return { level: 'degraded', text: down === services.length ? '全部服务不可用' : `${down} 个服务不可用` };
+  return { level: 'degraded', text: down === services.length ? '全部服务离线' : `${down} 个服务离线` };
 }
 
 export function renderStatusBody(payload, formatTime) {
@@ -31,11 +31,9 @@ export function renderStatusBody(payload, formatTime) {
       const view = STATE_VIEW[service.state] || STATE_VIEW.unknown;
       return `
         <li class="status-row">
-          <div class="status-row-head">
-            <span class="status-row-name">${escapeHtml(service.title)}</span>
-            <span class="card-status-badge ${view.cls}"><span class="status-dot"></span><span class="status-text">${view.text}</span></span>
-          </div>
+          <span class="status-row-name">${escapeHtml(service.title)}</span>
           <div class="uptime-strip">${renderUptimeInner(service.bars ? service : null, formatTime)}</div>
+          <span class="card-status-badge ${view.cls}"><span class="status-dot"></span><span class="status-text">${view.text}</span></span>
         </li>`;
     })
     .join('');
