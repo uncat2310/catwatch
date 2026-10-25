@@ -48,6 +48,7 @@ pre code{background:none;padding:0}
 .brand{font-family:var(--font-serif);font-weight:600;font-size:20px;color:var(--ink)}
 .brand:hover{text-decoration:none;color:var(--ink)}
 .brand small{font-family:var(--font-mono);font-weight:400;font-size:12px;color:var(--muted);margin-left:9px;letter-spacing:.12em}
+.toc-btn{display:none}
 .topnav{margin-left:auto;display:flex;gap:26px;align-items:center;font-size:14px}
 .topnav a{color:var(--ink-2)}
 .topnav a:hover{color:var(--accent);text-decoration:none}
@@ -67,7 +68,6 @@ pre code{background:none;padding:0}
 
 /* sidebar */
 .sidebar{position:sticky;top:92px;align-self:start}
-.sidebar summary{display:none}
 .sidebar .group{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.16em;color:var(--muted);margin:22px 10px 8px;text-transform:uppercase}
 .sidebar .group:first-child{margin-top:2px}
 .sidebar a{display:block;padding:6px 10px;border-radius:var(--radius-sm);color:var(--ink-2);font-size:14px}
@@ -150,16 +150,16 @@ footer b{color:var(--ink-2)}
 footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em}
 
 @media (max-width:960px){
-  .layout{grid-template-columns:1fr;gap:26px;padding-top:44px}
-  .sidebar{position:static;display:block;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:0;overflow:hidden}
-  .sidebar summary{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-weight:700;font-size:15px;cursor:pointer;list-style:none}
-  .sidebar summary::-webkit-details-marker{display:none}
-  .sidebar .chev{color:var(--muted);transition:transform .2s}
-  .sidebar[open] .chev{transform:rotate(180deg)}
-  .toc-body{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:2px 16px 16px}
-  .sidebar .group{flex:0 0 100%;margin:12px 2px 2px}
-  .sidebar .group:first-child{margin-top:0}
-  .sidebar a{background:var(--surface);border:1px solid var(--card-border);border-radius:999px;padding:5px 13px}
+  .layout{grid-template-columns:1fr;gap:26px;padding-top:36px}
+  .sidebar{position:fixed;top:76px;left:16px;right:16px;z-index:55;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-pop);padding:10px;max-height:min(72vh,560px);overflow-y:auto;opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .22s ease,transform .22s ease,visibility .22s}
+  .sidebar.open{opacity:1;visibility:visible;transform:none}
+  .toc-body{display:block;padding:4px}
+  .toc-btn{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);color:var(--ink);font:inherit;font-size:14px;font-weight:600;padding:8px 15px;border-radius:999px;cursor:pointer}
+  .toc-btn .bars{width:15px;height:2px;background:currentColor;box-shadow:0 -5px 0 currentColor,0 5px 0 currentColor;border-radius:2px;flex:none}
+  .toc-btn.on{color:var(--accent);border-color:var(--accent);background:rgba(201,100,66,.08)}
+  .sidebar .group{margin:14px 10px 6px}
+  .sidebar .group:first-child{margin-top:4px}
+  .sidebar a{display:block;background:transparent;border:none;border-radius:10px;padding:9px 12px;font-size:15px}
   .topnav a:not(.btn){display:none}
   .feat{grid-template-columns:1fr}
   .shot-row{grid-template-columns:1fr}
@@ -190,6 +190,7 @@ footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;letter
     <img class="mark" src="favicon.svg" alt="CatWatch 图标">
     <a class="brand" href="#">CatWatch<small>猫咪值班室 · 文档</small></a>
     <nav class="topnav">
+      <button class="toc-btn" id="tocBtn" type="button" aria-label="打开目录" aria-expanded="false"><span class="bars"></span>目录</button>
       <a href="#deploy">部署</a><a href="#config">配置</a><a href="#notify">通知</a><a href="#status">状态页</a><a href="#api">API</a>
       <a class="btn btn-primary btn-sm" href="https://github.com/uncat2310/catwatch">GitHub</a>
     </nav>
@@ -197,8 +198,7 @@ footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;letter
 </header>
 
 <div class="wrap layout">
-  <details class="sidebar" id="toc" open>
-    <summary class="toc-head">目录<span class="chev">▾</span></summary>
+  <aside class="sidebar" id="toc">
     <div class="toc-body">
     <div class="group">开始</div>
     <a href="#features">功能一览</a>
@@ -216,7 +216,7 @@ footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;letter
     <a href="#api">API 速查</a>
     <a href="#faq">常见问题</a>
     </div>
-  </details>
+  </aside>
 
   <main class="content">
     <p class="eyebrow">文档与教程 · DOCUMENTATION</p>
@@ -463,7 +463,7 @@ docker compose pull && docker compose up -d</pre></div>
 </footer>
 <button class="to-top" id="toTop" type="button" aria-label="回到顶部">↑</button>
 <script>
-(function(){var t=document.getElementById('toc');if(!t)return;var mq=window.matchMedia('(max-width:960px)');if(mq.matches){t.removeAttribute('open');}t.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){if(mq.matches){t.removeAttribute('open');}});});})();
+(function(){var t=document.getElementById('toc'),b=document.getElementById('tocBtn');if(!t||!b)return;var mq=window.matchMedia('(max-width:960px)');function close(){t.classList.remove('open');b.classList.remove('on');b.setAttribute('aria-expanded','false');}b.addEventListener('click',function(e){e.stopPropagation();var o=t.classList.toggle('open');b.classList.toggle('on',o);b.setAttribute('aria-expanded',o?'true':'false');});t.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){if(mq.matches){close();}});});document.addEventListener('click',function(e){if(mq.matches&&t.classList.contains('open')&&!t.contains(e.target)){close();}});document.addEventListener('keydown',function(e){if(e.key==='Escape'){close();}});})();
 (function(){var b=document.getElementById('toTop');if(!b)return;var f=function(){b.classList.toggle('show',window.scrollY>600);};window.addEventListener('scroll',f,{passive:true});f();b.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});})();
 </script>
 </body>
