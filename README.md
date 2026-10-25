@@ -10,6 +10,8 @@
 
 *一页直达，猫在值班。*
 
+📖 **[在线文档与教程](https://uncat2310.github.io/catwatch/)** — 部署、配置、通知与公开状态页，一页看完
+
 <br/>
 
 ![浅色模式](docs/screenshots/light.webp)
