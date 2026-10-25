@@ -145,16 +145,32 @@ footer b{color:var(--ink-2)}
 footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em}
 
 @media (max-width:960px){
-  .layout{grid-template-columns:1fr;gap:26px;padding-top:30px}
-  .sidebar{position:static;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
-  .sidebar .group{margin:4px 6px 4px 0;width:100%}
-  .sidebar .group:not(:first-child){width:auto}
-  .sidebar a{background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:4px 13px}
+  .layout{grid-template-columns:1fr;gap:26px;padding-top:28px}
+  .sidebar{position:static;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:16px}
+  .sidebar .group{flex:0 0 100%;margin:12px 2px 2px}
+  .sidebar .group:first-child{margin-top:0}
+  .sidebar a{background:var(--surface);border:1px solid var(--card-border);border-radius:999px;padding:5px 13px}
   .topnav a:not(.btn){display:none}
   .feat{grid-template-columns:1fr}
   .shot-row{grid-template-columns:1fr}
-  h1{font-size:34px} h2{font-size:26px}
+  h2{font-size:26px}
   .wrap{padding:0 20px}
+}
+@media (max-width:640px){
+  .brand small{display:none}
+  .topbar-inner{height:56px}
+  .brand{font-size:19px}
+  h1{font-size:31px}
+  .lede{font-size:16px}
+  section{margin-top:48px}
+  h2{font-size:24px}
+  .codeblock{padding:14px 16px}
+  .codeblock pre{font-size:12.5px}
+  table{font-size:13px}
+  th,td{padding:8px 12px}
+  .card{padding:18px}
+  ol.steps>li{padding-left:46px}
+  footer .sp{margin-left:0}
 }
 </style>
 </head>
