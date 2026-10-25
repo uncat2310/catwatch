@@ -6,143 +6,155 @@
 <title>猫咪值班室 CatWatch · 文档与教程</title>
 <meta name="description" content="CatWatch 猫咪值班室文档：温暖的自托管导航页，顺便替你盯着每一个服务。Docker / Compose / Node 部署、配置、通知、公开状态页与 API 速查。">
 <style>
-/* neobrutalism design system tokens (warm variant) */
+/* CatWatch 产品自身的设计令牌（取自 src/style.css 浅色主题） */
 :root{
-  --bg:#fff4cf; --surface:#fffaf0; --surface-warm:#ffdca8;
-  --fg:#2a1810; --fg-2:#593625; --muted:#8a6652; --meta:#d24b1f;
-  --border:#2a1810; --border-soft:#efd0ab;
-  --accent:#d24b1f; --accent-on:#ffffff;
-  --accent-hover:color-mix(in oklab, var(--accent), black 8%);
-  --success:#3d8f4f; --warn:#f2a93b; --danger:#b83a2f;
-  --yellow:#fdc800; --violet:#432dd7; --sky:#49b6e5;
-  --font-display:"Arial Black","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  --font-body:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  --font-mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
-  --text-xs:12px; --text-sm:14px; --text-base:16px; --text-lg:18px;
-  --text-xl:24px; --text-2xl:36px; --text-3xl:54px;
-  --leading-body:1.6; --leading-tight:1.12;
-  --radius:14px; --shadow:6px 6px 0 var(--fg); --shadow-sm:4px 4px 0 var(--fg);
+  --paper:#f0eee6;
+  --surface:#f7f5ef;
+  --card:#faf9f5;
+  --icon-bg:#fffdf9;
+  --ink:#2b2722;
+  --ink-2:#5c554b;
+  --muted:#8a8175;
+  --line:rgba(80,62,40,.13);
+  --card-border:rgba(80,62,40,.1);
+  --accent:#c96442;
+  --accent-hover:#b4553a;
+  --on-accent:#fffaf5;
+  --alive:#4e7a45;
+  --dead:#b8322e;
+  --observing:#b0842c;
+  --shadow-card:0 1px 2px rgba(60,44,24,.04),0 8px 24px -14px rgba(60,44,24,.16);
+  --shadow-pop:0 24px 64px -24px rgba(60,44,24,.3),0 2px 8px rgba(60,44,24,.07);
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",Roboto,sans-serif;
+  --font-serif:"Tiempos Headline","Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC",serif;
+  --font-mono:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,monospace;
+  --radius-sm:8px; --radius-md:10px; --radius-lg:16px;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:var(--text-base);line-height:var(--leading-body);-webkit-font-smoothing:antialiased}
-::selection{background:var(--yellow)}
-a{color:var(--accent);text-decoration-thickness:2px;text-underline-offset:3px}
-a:hover{color:var(--accent-hover)}
-.wrap{max-width:1200px;margin:0 auto;padding:0 28px}
-code{font-family:var(--font-mono);font-size:.88em;background:var(--surface-warm);border:1.5px solid var(--border-soft);padding:1px 6px;border-radius:6px}
-pre code{background:none;border:none;padding:0}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-sans);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+::selection{background:rgba(201,100,66,.25)}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hover);text-decoration:underline;text-underline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+code{font-family:var(--font-mono);font-size:.87em;background:rgba(80,62,40,.06);padding:1px 6px;border-radius:6px}
+pre code{background:none;padding:0}
 
 /* topbar */
-.topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:2.5px solid var(--border)}
-.topbar-inner{display:flex;align-items:center;gap:14px;height:68px}
-.mark{width:42px;height:42px;background:var(--yellow);border:2.5px solid var(--border);border-radius:10px;display:grid;place-items:center;font-size:23px;transform:rotate(-4deg);box-shadow:3px 3px 0 var(--fg);flex:none}
-.brand{font-family:var(--font-display);font-weight:900;font-size:21px;letter-spacing:.01em;color:var(--fg);text-decoration:none}
-.brand small{font-family:var(--font-body);font-weight:700;font-size:var(--text-sm);color:var(--meta);margin-left:8px;letter-spacing:.14em}
-.topnav{margin-left:auto;display:flex;gap:26px;align-items:center;font-weight:700;font-size:var(--text-sm)}
-.topnav a{color:var(--fg);text-decoration:none}
-.topnav a:hover{color:var(--accent)}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(247,245,239,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar-inner{display:flex;align-items:center;gap:12px;height:64px}
+.mark{width:36px;height:36px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-md);display:grid;place-items:center;font-size:20px;box-shadow:var(--shadow-card);flex:none}
+.brand{font-family:var(--font-serif);font-weight:600;font-size:20px;color:var(--ink)}
+.brand:hover{text-decoration:none;color:var(--ink)}
+.brand small{font-family:var(--font-mono);font-weight:400;font-size:12px;color:var(--muted);margin-left:9px;letter-spacing:.12em}
+.topnav{margin-left:auto;display:flex;gap:26px;align-items:center;font-size:14px}
+.topnav a{color:var(--ink-2)}
+.topnav a:hover{color:var(--accent);text-decoration:none}
 
 /* buttons */
-.btn{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:var(--text-sm);padding:12px 22px;border:2.5px solid var(--border);border-radius:12px;text-decoration:none;transition:transform .15s,box-shadow .15s;cursor:pointer}
-.btn-primary{background:var(--yellow);color:var(--fg);box-shadow:var(--shadow-sm)}
-.btn-primary:hover{background:var(--yellow);color:var(--fg);transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--fg)}
-.btn-accent{background:var(--accent);color:var(--accent-on);box-shadow:var(--shadow-sm)}
-.btn-accent:hover{background:var(--accent-hover);color:#fff;transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--fg)}
-.btn-ghost{background:var(--surface);color:var(--fg);box-shadow:var(--shadow-sm)}
-.btn-ghost:hover{color:var(--fg);transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--fg)}
+.btn{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:10px 20px;border-radius:var(--radius-md);border:1px solid transparent;transition:all 160ms ease;cursor:pointer}
+.btn:hover{text-decoration:none}
+.btn-primary{background:var(--accent);color:var(--on-accent)}
+.btn-primary:hover{background:var(--accent-hover);color:var(--on-accent)}
+.btn-ghost{background:var(--card);color:var(--ink);border-color:var(--line)}
+.btn-ghost:hover{color:var(--accent);border-color:var(--accent)}
+.btn-sm{padding:7px 16px}
 
 /* layout */
-.layout{display:grid;grid-template-columns:238px 1fr;gap:44px;padding-top:44px;padding-bottom:96px}
-.content{min-width:0;max-width:820px}
+.layout{display:grid;grid-template-columns:224px 1fr;gap:52px;padding-top:44px;padding-bottom:96px}
+.content{min-width:0;max-width:800px}
 
 /* sidebar */
-.sidebar{position:sticky;top:92px;align-self:start;background:var(--surface);border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 16px}
-.sidebar .group{font-family:var(--font-mono);font-size:var(--text-xs);font-weight:700;letter-spacing:.14em;color:var(--fg);background:var(--yellow);display:inline-block;padding:2px 8px;border:2px solid var(--border);border-radius:6px;margin:16px 6px 8px;transform:rotate(-1.2deg)}
-.sidebar .group:first-child{margin-top:0}
-.sidebar a{display:block;padding:6px 10px;border-radius:8px;color:var(--fg-2);font-size:var(--text-sm);font-weight:600;text-decoration:none}
-.sidebar a:hover{background:var(--surface-warm);color:var(--fg)}
+.sidebar{position:sticky;top:92px;align-self:start}
+.sidebar .group{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.16em;color:var(--muted);margin:22px 10px 8px;text-transform:uppercase}
+.sidebar .group:first-child{margin-top:2px}
+.sidebar a{display:block;padding:6px 10px;border-radius:var(--radius-sm);color:var(--ink-2);font-size:14px}
+.sidebar a:hover{background:rgba(80,62,40,.05);color:var(--ink);text-decoration:none}
 
 /* hero */
-.eyebrow{font-family:var(--font-mono);font-size:var(--text-xs);font-weight:700;letter-spacing:.22em;color:var(--meta);margin:6px 0 16px}
-h1{font-family:var(--font-display);font-weight:900;font-size:clamp(38px,5.4vw,58px);line-height:var(--leading-tight);margin:0 0 20px;letter-spacing:0}
-h1 .hl{background:var(--yellow);padding:0 10px;border:2.5px solid var(--border);border-radius:10px;box-shadow:var(--shadow-sm);display:inline-block;transform:rotate(-1deg)}
-.lede{font-size:var(--text-lg);color:var(--fg-2);max-width:640px;margin:0 0 26px}
-.actions{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px}
-.chips{display:flex;gap:10px;flex-wrap:wrap}
-.chip{font-size:var(--text-xs);font-weight:800;padding:5px 12px;border:2px solid var(--border);border-radius:999px;background:var(--surface)}
-.chip.c1{background:var(--surface-warm)} .chip.c2{background:#cdeffd} .chip.c3{background:#d9f2dc}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.22em;color:var(--accent);margin:4px 0 18px}
+h1{font-family:var(--font-serif);font-weight:600;font-size:clamp(36px,5vw,52px);line-height:1.18;margin:0 0 18px;letter-spacing:.01em}
+h1 em{font-style:italic;color:var(--accent)}
+.lede{font-size:17.5px;color:var(--ink-2);max-width:620px;margin:0 0 26px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font-size:12.5px;color:var(--ink-2);padding:4px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface)}
+.chip i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--alive);margin-right:7px;vertical-align:1px}
+.chip i.o{background:var(--observing)} .chip i.a{background:var(--accent)}
 
 /* figures */
 figure{margin:0}
-.shot{border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:8px 8px 0 var(--fg);overflow:hidden;background:var(--surface)}
+.shot{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);overflow:hidden}
 .shot img{display:block;width:100%;height:auto}
-.shot figcaption{font-family:var(--font-mono);font-size:var(--text-xs);font-weight:700;letter-spacing:.08em;padding:9px 14px;border-top:2.5px solid var(--border);background:var(--surface)}
-.shot-row{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:26px}
+.shot figcaption{font-size:12.5px;color:var(--muted);padding:10px 16px;border-top:1px solid var(--line)}
+.shot-row{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}
 
 /* sections */
-section{margin-top:64px;scroll-margin-top:92px}
-h2{font-family:var(--font-display);font-weight:900;font-size:var(--text-2xl);line-height:1.15;margin:0 0 14px;display:flex;align-items:center;gap:14px}
-h2 .no{font-family:var(--font-mono);font-size:var(--text-sm);font-weight:700;background:var(--violet);color:#fff;border:2.5px solid var(--border);border-radius:8px;padding:3px 9px;box-shadow:3px 3px 0 var(--fg);transform:rotate(-2deg)}
-h2 .no.y{background:var(--yellow);color:var(--fg)} h2 .no.o{background:var(--accent);color:#fff} h2 .no.g{background:var(--success);color:#fff}
-h3{font-size:var(--text-lg);font-weight:900;margin:30px 0 8px}
+section{margin-top:64px;scroll-margin-top:88px}
+h2{font-family:var(--font-serif);font-weight:600;font-size:30px;line-height:1.25;margin:0 0 12px;display:flex;align-items:baseline;gap:12px}
+h2 .no{font-family:var(--font-mono);font-size:13px;color:var(--accent);letter-spacing:.06em}
+h3{font-size:16.5px;font-weight:700;margin:28px 0 6px}
 p{margin:10px 0}
-.dim{color:var(--fg-2)} .small{font-size:var(--text-sm)}
+.dim{color:var(--ink-2)} .small{font-size:14px;color:var(--ink-2)}
 
 /* feature cards */
-.feat{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px}
-.card{background:var(--surface);border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;transition:transform .18s}
-.card:hover{transform:rotate(0deg) translateY(-3px)!important}
-.card .ic{width:46px;height:46px;border:2.5px solid var(--border);border-radius:11px;display:grid;place-items:center;font-size:22px;margin-bottom:12px;box-shadow:3px 3px 0 var(--fg)}
-.card h4{margin:0 0 6px;font-size:var(--text-lg);font-weight:900}
-.card p{margin:0;color:var(--fg-2);font-size:var(--text-sm)}
+.feat{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+.card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:22px 24px;transition:box-shadow 200ms ease,transform 200ms ease}
+.card:hover{box-shadow:var(--shadow-pop);transform:translateY(-2px)}
+.card .ic{width:42px;height:42px;background:var(--icon-bg);border:1px solid var(--card-border);border-radius:var(--radius-md);display:grid;place-items:center;font-size:20px;margin-bottom:12px}
+.card h4{margin:0 0 5px;font-size:16.5px;font-weight:700}
+.card p{margin:0;color:var(--ink-2);font-size:14px}
 
 /* code blocks */
-.codeblock{background:var(--fg);color:#ffeec2;border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;overflow-x:auto;margin:14px 0}
+.codeblock{background:#2b2722;color:#efe9dc;border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:18px 22px;overflow-x:auto;margin:14px 0}
 .codeblock pre{margin:0;font-family:var(--font-mono);font-size:13.5px;line-height:1.65;white-space:pre}
-.codeblock .cm{color:#c99f7a}
+.codeblock .cm{color:#a89a83}
 
 /* steps */
 ol.steps{list-style:none;counter-reset:st;padding:0;margin:18px 0}
-ol.steps>li{counter-increment:st;position:relative;background:var(--surface);border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 20px 16px 66px;margin-bottom:16px}
-ol.steps>li::before{content:counter(st);position:absolute;left:16px;top:14px;width:34px;height:34px;background:var(--yellow);border:2.5px solid var(--border);border-radius:9px;display:grid;place-items:center;font-family:var(--font-display);font-weight:900;font-size:17px}
-ol.steps b.t{display:block;font-weight:900;margin-bottom:2px}
-ol.steps p{margin:2px 0;color:var(--fg-2);font-size:var(--text-sm)}
+ol.steps>li{counter-increment:st;position:relative;padding:4px 0 18px 52px;margin:0}
+ol.steps>li::before{content:counter(st);position:absolute;left:0;top:0;width:34px;height:34px;background:var(--card);border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;font-family:var(--font-serif);font-style:italic;font-size:16px;color:var(--accent)}
+ol.steps>li:not(:last-child)::after{content:"";position:absolute;left:17px;top:42px;bottom:0;width:1px;background:var(--line)}
+ol.steps b.t{display:block;font-weight:700;margin-bottom:1px}
+ol.steps p{margin:2px 0;color:var(--ink-2);font-size:14px}
 
 /* tables */
-.tblwrap{overflow-x:auto;border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);margin:14px 0;background:var(--surface)}
-table{border-collapse:collapse;width:100%;font-size:var(--text-sm)}
-th{background:var(--yellow);text-align:left;padding:10px 14px;border-bottom:2.5px solid var(--border);font-weight:900;white-space:nowrap}
-td{padding:9px 14px;border-top:1.5px solid var(--border-soft);vertical-align:top}
-td:first-child{font-weight:700;white-space:nowrap}
+.tblwrap{overflow-x:auto;border:1px solid var(--card-border);border-radius:var(--radius-lg);margin:14px 0;background:var(--card);box-shadow:var(--shadow-card)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;padding:11px 16px;border-bottom:1px solid var(--line);font-weight:700;color:var(--ink);background:var(--surface);white-space:nowrap}
+td{padding:9px 16px;border-top:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+tr:first-child td{border-top:none}
 
 /* callouts */
-.callout{background:var(--surface-warm);border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 20px;margin:18px 0}
-.callout .tag{display:inline-block;font-family:var(--font-mono);font-size:var(--text-xs);font-weight:700;letter-spacing:.1em;background:var(--fg);color:var(--yellow);padding:2px 9px;border-radius:6px;margin-bottom:8px}
-.callout p{margin:4px 0;font-size:var(--text-sm)}
-.callout.violet{background:#e3defc} .callout.violet .tag{background:var(--violet);color:#fff}
+.callout{background:var(--surface);border:1px solid var(--card-border);border-left:3px solid var(--accent);border-radius:var(--radius-md);padding:14px 18px;margin:18px 0}
+.callout .tag{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--accent);margin-bottom:5px}
+.callout p{margin:3px 0;font-size:14px;color:var(--ink-2)}
 
 /* faq */
-details.faq{background:var(--surface);border:2.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 20px;margin-bottom:14px}
-details.faq summary{font-weight:900;cursor:pointer;list-style:none}
+details.faq{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:15px 20px;margin-bottom:12px}
+details.faq summary{font-weight:700;cursor:pointer;list-style:none}
 details.faq summary::-webkit-details-marker{display:none}
-details.faq summary::before{content:"Q ";font-family:var(--font-mono);color:var(--meta);font-weight:700}
-details.faq p{color:var(--fg-2);font-size:var(--text-sm);margin:8px 0 2px}
+details.faq summary::after{content:"+";float:right;color:var(--muted);font-weight:400}
+details.faq[open ] summary::after{content:"–"}
+details.faq p{color:var(--ink-2);font-size:14px;margin:8px 0 2px}
 
-footer{border-top:2.5px solid var(--border);background:var(--surface);padding:30px 0 42px;font-size:var(--text-sm);color:var(--fg-2)}
+footer{border-top:1px solid var(--line);padding:28px 0 40px;font-size:13.5px;color:var(--muted)}
 footer .wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-footer b{color:var(--fg)}
-footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.06em}
+footer b{color:var(--ink-2)}
+footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em}
 
 @media (max-width:960px){
   .layout{grid-template-columns:1fr;gap:26px;padding-top:30px}
-  .sidebar{position:static;display:flex;flex-wrap:wrap;gap:4px 8px;padding:14px;align-items:center}
-  .sidebar .group{margin:4px 4px 4px 0}
-  .sidebar a{background:var(--bg);border:2px solid var(--border-soft);border-radius:999px;padding:4px 12px}
+  .sidebar{position:static;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+  .sidebar .group{margin:4px 6px 4px 0;width:100%}
+  .sidebar .group:not(:first-child){width:auto}
+  .sidebar a{background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:4px 13px}
   .topnav a:not(.btn){display:none}
   .feat{grid-template-columns:1fr}
   .shot-row{grid-template-columns:1fr}
-  h1{font-size:36px} h2{font-size:29px}
+  h1{font-size:34px} h2{font-size:26px}
+  .wrap{padding:0 20px}
 }
 </style>
 </head>
@@ -153,25 +165,25 @@ footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs
     <a class="brand" href="#">CatWatch<small>猫咪值班室 · 文档</small></a>
     <nav class="topnav">
       <a href="#deploy">部署</a><a href="#config">配置</a><a href="#notify">通知</a><a href="#status">状态页</a><a href="#api">API</a>
-      <a class="btn btn-primary" href="https://github.com/uncat2310/catwatch">GitHub</a>
+      <a class="btn btn-primary btn-sm" href="https://github.com/uncat2310/catwatch">GitHub</a>
     </nav>
   </div>
 </header>
 
 <div class="wrap layout">
   <aside class="sidebar">
-    <span class="group">开始</span>
+    <div class="group">开始</div>
     <a href="#features">功能一览</a>
     <a href="#deploy">Docker 部署</a>
     <a href="#deploy-alt">Compose / Node</a>
-    <span class="group">使用</span>
+    <div class="group">使用</div>
     <a href="#config">配置服务列表</a>
     <a href="#env">环境变量速查</a>
     <a href="#modes">两种编辑模式</a>
     <a href="#notify">状态通知</a>
     <a href="#status">公开状态页</a>
     <a href="#icons">服务图标</a>
-    <span class="group">进阶</span>
+    <div class="group">进阶</div>
     <a href="#upgrade">升级与安全</a>
     <a href="#api">API 速查</a>
     <a href="#faq">常见问题</a>
@@ -179,19 +191,19 @@ footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs
 
   <main class="content">
     <p class="eyebrow">文档与教程 · DOCUMENTATION</p>
-    <h1>服务摆一页，<span class="hl">猫来值班</span></h1>
+    <h1>服务摆一页，<em>猫来值班</em></h1>
     <p class="lede"><strong>猫咪值班室（CatWatch）</strong>是一个轻量的个人服务器导航页：把常用服务聚合成一页，同时由服务端持续探测、记录 24 小时可用率，谁掉线了就喊你，还能生成一个只读的公开状态页分享给朋友。</p>
     <div class="actions">
-      <a class="btn btn-accent" href="#deploy">开始部署 →</a>
+      <a class="btn btn-primary" href="#deploy">开始部署 →</a>
       <a class="btn btn-ghost" href="#features">先看功能</a>
     </div>
     <div class="chips">
-      <span class="chip c1">一个容器搞定</span>
-      <span class="chip c2">无数据库 · 无前端框架</span>
-      <span class="chip c3">数据都是文件，好备份</span>
+      <span class="chip"><i></i>一个容器搞定</span>
+      <span class="chip"><i class="o"></i>无数据库 · 无前端框架</span>
+      <span class="chip"><i class="a"></i>数据都是文件，好备份</span>
     </div>
 
-    <div style="height:36px"></div>
+    <div style="height:38px"></div>
     <figure class="shot">
       <img src="screenshots/light.webp" alt="CatWatch 浅色模式界面">
       <figcaption>浅色模式 · 暖纸色界面，服务一页摆齐</figcaption>
@@ -208,19 +220,19 @@ footer .sp{margin-left:auto;font-family:var(--font-mono);font-size:var(--text-xs
     </div>
 
     <section id="features">
-      <h2><span class="no y">01</span>功能一览</h2>
+      <h2><span class="no">01</span>功能一览</h2>
       <div class="feat">
-        <div class="card" style="transform:rotate(-.5deg)"><div class="ic" style="background:var(--yellow)">🧭</div><h4>导航</h4><p>服务卡片自动获取图标；<code>Ctrl + K</code> / <code>⌘ K</code> 搜索、键盘直达；首屏由服务端预渲染，打开就是齐的。</p></div>
-        <div class="card" style="transform:rotate(.5deg)"><div class="ic" style="background:#cdeffd">📊</div><h4>监控</h4><p>后台每 12 秒探测一次；每个服务显示 24 小时可用率条（48 段 × 30 分钟）和延迟；历史保留 7 天。</p></div>
-        <div class="card" style="transform:rotate(.5deg)"><div class="ic" style="background:#ffd1c2">🔔</div><h4>通知</h4><p>连续 3 次失败才判定离线，恢复时附中断时长；支持 Telegram、Bark、Server酱、通用 Webhook。</p></div>
-        <div class="card" style="transform:rotate(-.5deg)"><div class="ic" style="background:#d9f2dc">🌐</div><h4>公开状态页</h4><p><code>/status</code> 只展示你勾选公开的服务：名称、状态、可用率和事件，不暴露任何地址。</p></div>
-        <div class="card" style="transform:rotate(-.5deg)"><div class="ic" style="background:#e3defc">☁️</div><h4>多设备同步</h4><p>设置 <code>ADMIN_TOKEN</code> 后，页面上的增删改直接写回服务器，所有设备看到同一份列表。</p></div>
-        <div class="card" style="transform:rotate(.5deg)"><div class="ic" style="background:var(--surface-warm)">🖼️</div><h4>图标</h4><p>服务端读取服务页面声明的图标并缓存，同源加载；也可以手动指定；拿不到时显示首字母头像。</p></div>
+        <div class="card"><div class="ic">🧭</div><h4>导航</h4><p>服务卡片自动获取图标；<code>Ctrl + K</code> / <code>⌘ K</code> 搜索、键盘直达；首屏由服务端预渲染，打开就是齐的。</p></div>
+        <div class="card"><div class="ic">📊</div><h4>监控</h4><p>后台每 12 秒探测一次；每个服务显示 24 小时可用率条（48 段 × 30 分钟）和延迟；历史保留 7 天。</p></div>
+        <div class="card"><div class="ic">🔔</div><h4>通知</h4><p>连续 3 次失败才判定离线，恢复时附中断时长；支持 Telegram、Bark、Server酱、通用 Webhook。</p></div>
+        <div class="card"><div class="ic">🌐</div><h4>公开状态页</h4><p><code>/status</code> 只展示你勾选公开的服务：名称、状态、可用率和事件，不暴露任何地址。</p></div>
+        <div class="card"><div class="ic">☁️</div><h4>多设备同步</h4><p>设置 <code>ADMIN_TOKEN</code> 后，页面上的增删改直接写回服务器，所有设备看到同一份列表。</p></div>
+        <div class="card"><div class="ic">🖼️</div><h4>图标</h4><p>服务端读取服务页面声明的图标并缓存，同源加载；也可以手动指定；拿不到时显示首字母头像。</p></div>
       </div>
     </section>
 
     <section id="deploy">
-      <h2><span class="no o">02</span>Docker 部署（推荐）</h2>
+      <h2><span class="no">02</span>Docker 部署（推荐）</h2>
       <p class="dim">一个容器搞定：Node.js + Vite + 原生 JavaScript，数据都是文件——服务列表是 <code>config/projects.json</code>，历史和图标缓存在 <code>data/</code> 目录。</p>
       <ol class="steps">
         <li><b class="t">建目录，给写权限</b><p>容器内以 node 用户（uid 1000）运行，挂载的目录需要它能写。</p></li>
@@ -247,17 +259,17 @@ docker run -d \
       <div class="codeblock"><pre>git clone https://github.com/uncat2310/catwatch.git
 cd catwatch
 docker compose up -d</pre></div>
-      <p class="dim small"><code>docker-compose.yml</code> 里的 <code>ADMIN_TOKEN</code>、通知变量和 volumes 默认是注释掉的，按需取消注释即可。文件同时声明了 image 与 build：默认拉取 GHCR 镜像，也可以 <code>docker compose build</code> 自己构建。</p>
+      <p class="small"><code>docker-compose.yml</code> 里的 <code>ADMIN_TOKEN</code>、通知变量和 volumes 默认是注释掉的，按需取消注释即可。文件同时声明了 image 与 build：默认拉取 GHCR 镜像，也可以 <code>docker compose build</code> 自己构建。</p>
       <h3>Node.js 直接跑</h3>
-      <p class="dim small">要求 Node.js 18+。</p>
+      <p class="small">要求 Node.js 18+。</p>
       <div class="codeblock"><pre>npm ci
 npm run build
 ADMIN_TOKEN=你的随机口令 npm start</pre></div>
-      <p class="dim small">常驻运行可以用 PM2（<code>pm2 start server.js --name catwatch</code> 后 <code>pm2 save</code>），或写一个 systemd 单元——完整示例见仓库 <a href="https://github.com/uncat2310/catwatch#nodejs">README</a>。生产环境建议用独立的非 root 用户运行，并把口令放在权限 600 的环境文件里。</p>
+      <p class="small">常驻运行可以用 PM2（<code>pm2 start server.js --name catwatch</code> 后 <code>pm2 save</code>），或写一个 systemd 单元——完整示例见仓库 <a href="https://github.com/uncat2310/catwatch#nodejs">README</a>。生产环境建议用独立的非 root 用户运行，并把口令放在权限 600 的环境文件里。</p>
     </section>
 
     <section id="config">
-      <h2><span class="no g">04</span>配置服务列表</h2>
+      <h2><span class="no">04</span>配置服务列表</h2>
       <p class="dim">大多数情况下直接在页面上增删改即可；也可以手工编辑 <code>config/projects.json</code>，保存后自动生效、无需重启。</p>
       <div class="codeblock"><pre>[
   {
@@ -277,11 +289,11 @@ ADMIN_TOKEN=你的随机口令 npm start</pre></div>
         <tr><td><code>statusPublic</code></td><td></td><td>是否出现在公开状态页，默认 <code>false</code></td></tr>
         <tr><td><code>iconUrl</code></td><td></td><td>手动指定图标地址；留空则自动获取</td></tr>
       </table></div>
-      <p class="dim small"><code>config/projects.json</code> 已被 .gitignore / .dockerignore 忽略，可以放心写内网地址。文件不存在时显示内置的公开示例。字段完整的示例见仓库里的 <code>config/projects.example.json</code>。</p>
+      <p class="small"><code>config/projects.json</code> 已被 .gitignore / .dockerignore 忽略，可以放心写内网地址。文件不存在时显示内置的公开示例。字段完整的示例见仓库里的 <code>config/projects.example.json</code>。</p>
     </section>
 
     <section id="env">
-      <h2><span class="no y">05</span>环境变量速查</h2>
+      <h2><span class="no">05</span>环境变量速查</h2>
       <div class="tblwrap"><table>
         <tr><th>变量</th><th>默认</th><th>说明</th></tr>
         <tr><td><code>PORT</code></td><td><code>3000</code></td><td>监听端口</td></tr>
@@ -306,18 +318,18 @@ ADMIN_TOKEN=你的随机口令 npm start</pre></div>
         <tr><td>多设备同步</td><td>✅</td><td>❌</td></tr>
         <tr><td>可用率历史 / 通知 / 公开状态页</td><td>✅ 全部服务</td><td>仅 <code>projects.json</code> 中的服务</td></tr>
       </table></div>
-      <p class="dim small">管理口令保存在当前浏览器，可在「设置 → 服务器同步」中退出。从本地模式切换过来时，如果浏览器里还留着旧的本地列表，可以在「设置 → 服务器同步」里一键上传或丢弃。主题、标题、副标题这些个人偏好始终只保存在浏览器。</p>
+      <p class="small">管理口令保存在当前浏览器，可在「设置 → 服务器同步」中退出。从本地模式切换过来时，如果浏览器里还留着旧的本地列表，可以在「设置 → 服务器同步」里一键上传或丢弃。主题、标题、副标题这些个人偏好始终只保存在浏览器。</p>
     </section>
 
     <section id="notify">
-      <h2><span class="no o">07</span>状态通知</h2>
+      <h2><span class="no">07</span>状态通知</h2>
       <p class="dim">服务端每 12 秒探测一次启用了探针的服务，判定规则很稳重，不会因为一次抖动就半夜喊你：</p>
       <ol class="steps">
         <li><b class="t">连续 3 次失败才判定离线</b><p>约 36 秒持续失败才发送离线通知，单次抖动不打扰。</p></li>
         <li><b class="t">恢复立刻报平安</b><p>恢复后的第一次成功即发送恢复通知，并附上这次中断的时长。</p></li>
         <li><b class="t">重启不重复喊</b><p>状态写入历史文件，重启后不会重复通知同一次故障。</p></li>
       </ol>
-      <p class="dim small">配置任意一个通知变量即可启用，多个可以同时使用：Telegram（<code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code>）、Bark（<code>BARK_URL</code>）、Server酱（<code>SERVERCHAN_SENDKEY</code>）、通用 Webhook（<code>NOTIFY_WEBHOOK_URL</code>）。登录管理后，在「设置 → 服务器同步」里可以发送一条测试通知。</p>
+      <p class="small">配置任意一个通知变量即可启用，多个可以同时使用：Telegram（<code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code>）、Bark（<code>BARK_URL</code>）、Server酱（<code>SERVERCHAN_SENDKEY</code>）、通用 Webhook（<code>NOTIFY_WEBHOOK_URL</code>）。登录管理后，在「设置 → 服务器同步」里可以发送一条测试通知。</p>
       <h3>Webhook 请求长这样</h3>
       <div class="codeblock"><pre>{
   "title": "🔴 相册 不可用",
@@ -328,14 +340,14 @@ ADMIN_TOKEN=你的随机口令 npm start</pre></div>
     "type": "down", "at": 1792846872154, "error": "TIMEOUT"
   }
 }</pre></div>
-      <p class="dim small">恢复事件的 <code>type</code> 为 <code>up</code>，并带 <code>durationMs</code>（中断时长，毫秒）。</p>
+      <p class="small">恢复事件的 <code>type</code> 为 <code>up</code>，并带 <code>durationMs</code>（中断时长，毫秒）。</p>
     </section>
 
     <section id="status">
-      <h2><span class="no g">08</span>公开状态页</h2>
+      <h2><span class="no">08</span>公开状态页</h2>
       <p class="dim">访问 <code>https://你的域名/status</code> 就是只读状态页：整体状态、24 小时整体可用率、每个服务的状态条，以及最近的掉线 / 恢复事件。服务端预渲染，禁用 JS 也能看，每分钟自动刷新。</p>
-      <div class="callout violet"><span class="tag">隐私放心</span><p>只显示勾选了「在公开状态页显示」的服务；<strong>不包含</strong>任何服务地址、hostname、内部 ID 或错误码；图标通过不含 ID 的匿名地址加载。</p></div>
-      <p class="dim small">如果主页本身放在密码后面，可以只放行状态页需要的路径。Caddy 示例（主页加 basic_auth、状态页公开）：</p>
+      <div class="callout"><span class="tag">隐私放心</span><p>只显示勾选了「在公开状态页显示」的服务；<strong>不包含</strong>任何服务地址、hostname、内部 ID 或错误码；图标通过不含 ID 的匿名地址加载。</p></div>
+      <p class="small">如果主页本身放在密码后面，可以只放行状态页需要的路径。Caddy 示例（主页加 basic_auth、状态页公开）：</p>
       <div class="codeblock"><pre>portal.example.com {
     <span class="cm">@public path /status /api/status /api/status-icon/* /assets/* /favicon.svg</span>
     handle @public {
@@ -351,7 +363,7 @@ ADMIN_TOKEN=你的随机口令 npm start</pre></div>
     </section>
 
     <section id="icons">
-      <h2><span class="no y">09</span>服务图标怎么来</h2>
+      <h2><span class="no">09</span>服务图标怎么来</h2>
       <p class="dim">图标由<strong>服务端</strong>获取并缓存，浏览器统一从同源的 <code>/api/icon/&lt;服务ID&gt;</code> 加载，按这个顺序尝试：</p>
       <ol class="steps">
         <li><b class="t">你手动填的图标地址</b><p>编辑服务时填写的「图标地址」优先。</p></li>
@@ -359,7 +371,7 @@ ADMIN_TOKEN=你的随机口令 npm start</pre></div>
         <li><b class="t">站点根目录的 /favicon.ico</b><p>前面都没有时兜底尝试。</p></li>
         <li><b class="t">首字母头像</b><p>都拿不到时显示，颜色由服务名称决定。</p></li>
       </ol>
-      <p class="dim small">按文件头确认确实是图片（被重定向到登录页时返回的 HTML 不会被当成图标）；缓存在 <code>DATA_DIR/icons/</code>，24 小时刷新一次，源站暂时不可用时继续用旧图标；不经过任何第三方图标服务，HTTPS 门户下的 HTTP 服务也能正常显示。</p>
+      <p class="small">按文件头确认确实是图片（被重定向到登录页时返回的 HTML 不会被当成图标）；缓存在 <code>DATA_DIR/icons/</code>，24 小时刷新一次，源站暂时不可用时继续用旧图标；不经过任何第三方图标服务，HTTPS 门户下的 HTTP 服务也能正常显示。</p>
     </section>
 
     <section id="upgrade">
@@ -374,11 +386,11 @@ docker stop catwatch && docker rm catwatch
 docker compose pull && docker compose up -d</pre></div>
       <div class="callout"><span class="tag">从旧版升级注意</span><p>旧版推荐只读挂载单个 <code>projects.json</code>——这种挂载仍能运行，但页面上的保存会失败，历史和图标缓存也会在重启后丢失。请改为可写挂载 <code>config</code> 和 <code>data</code> 两个目录，并把宿主目录属主改为 <code>1000:1000</code>。</p></div>
       <h3>安全建议</h3>
-      <p class="dim small">① 对外提供服务请走 HTTPS 反向代理：管理口令通过请求头发送，明文 HTTP 下可能被窃听。② <code>ADMIN_TOKEN</code> 用足够长的随机字符串（少于 12 个字符时启动日志会提示），管理接口带限流。③ 不要把 <code>config/projects.json</code>、.env、口令和通知密钥提交到公开仓库。④ 浏览器提交的任意地址会拒绝 localhost / 私网 / 云 metadata 等目标（防 SSRF）。⑤ 服务返回的 SVG 图标带沙箱 CSP 输出，不能在本站执行脚本。反向代理的 Caddy / Nginx 完整示例见仓库 <a href="https://github.com/uncat2310/catwatch#-%E5%AE%89%E5%85%A8%E5%BB%BA%E8%AE%AE">README</a>。</p>
+      <p class="small">① 对外提供服务请走 HTTPS 反向代理：管理口令通过请求头发送，明文 HTTP 下可能被窃听。② <code>ADMIN_TOKEN</code> 用足够长的随机字符串（少于 12 个字符时启动日志会提示），管理接口带限流。③ 不要把 <code>config/projects.json</code>、.env、口令和通知密钥提交到公开仓库。④ 浏览器提交的任意地址会拒绝 localhost / 私网 / 云 metadata 等目标（防 SSRF）。⑤ 服务返回的 SVG 图标带沙箱 CSP 输出，不能在本站执行脚本。反向代理的 Caddy / Nginx 完整示例见仓库 <a href="https://github.com/uncat2310/catwatch#-%E5%AE%89%E5%85%A8%E5%BB%BA%E8%AE%AE">README</a>。</p>
     </section>
 
     <section id="api">
-      <h2><span class="no o">11</span>API 与快捷键速查</h2>
+      <h2><span class="no">11</span>API 与快捷键速查</h2>
       <div class="tblwrap"><table>
         <tr><th>方法</th><th>路径</th><th>鉴权</th><th>说明</th></tr>
         <tr><td>GET</td><td><code>/api/info</code></td><td></td><td>运行状态、是否启用管理</td></tr>
@@ -391,10 +403,10 @@ docker compose pull && docker compose up -d</pre></div>
         <tr><td>PUT</td><td><code>/api/projects</code></td><td>🔑</td><td>整体替换服务列表</td></tr>
         <tr><td>POST</td><td><code>/api/notify/test</code></td><td>🔑</td><td>发送测试通知</td></tr>
       </table></div>
-      <p class="dim small">🔑 = 需要请求头 <code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code>。</p>
+      <p class="small">🔑 = 需要请求头 <code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code>。</p>
       <h3>快捷键</h3>
       <div class="chips">
-        <span class="chip c1">Ctrl + K / ⌘ K 打开搜索</span>
+        <span class="chip">Ctrl + K / ⌘ K 打开搜索</span>
         <span class="chip">↑ ↓ 在结果中移动</span>
         <span class="chip">Enter 打开所选服务</span>
         <span class="chip">Esc 关闭弹窗</span>
@@ -402,7 +414,7 @@ docker compose pull && docker compose up -d</pre></div>
     </section>
 
     <section id="faq">
-      <h2><span class="no g">12</span>常见问题</h2>
+      <h2><span class="no">12</span>常见问题</h2>
       <details class="faq"><summary>不设置 ADMIN_TOKEN 能用吗？</summary><p>能。本地模式下页面照常使用，只是增删改只保存在当前浏览器、不能多设备同步；历史、通知与公开状态页也只覆盖 <code>projects.json</code> 里已有的服务。想要全套功能，设置一个足够长的随机口令即可。</p></details>
       <details class="faq"><summary>服务挂了，为什么没有立刻收到通知？</summary><p>故意的：连续 3 次探测失败（约 36 秒）才判定离线并通知，避免单次网络抖动误报。恢复则是第一次成功就发通知，并附上中断时长。</p></details>
       <details class="faq"><summary>公开状态页会暴露我的服务地址吗？</summary><p>不会。状态页只包含勾选公开的服务的名称、状态、可用率和事件，不含任何地址、hostname、内部 ID 或错误码，图标也走不含 ID 的匿名地址。</p></details>
